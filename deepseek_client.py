@@ -44,6 +44,11 @@ Margem do período: __%
 Responda em português do Brasil. Seja direto e prático. Não faça preâmbulos."""
 
 
+def tem_chave() -> bool:
+    """Verifica se há uma chave configurada (sem chamar a API)."""
+    return bool(os.environ.get("DEEPSEEK_API_KEY", "").strip())
+
+
 def analisar_numeros(resumo_texto: str, api_key: str = None, modelo: str = None) -> str:
     """Envia os números calculados para a DeepSeek e devolve o texto do raio-x.
 

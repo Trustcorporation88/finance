@@ -57,7 +57,7 @@ def _processar_dados(arquivo_bytes=None, nome_arquivo="", texto=None):
 
 @app.route("/")
 def index():
-    return render_template("index.html", has_key=deepseek_client.analisar_numeros(None) is not None)
+    return render_template("index.html", has_key=deepseek_client.tem_chave())
 
 
 @app.route("/analisar", methods=["POST"])
