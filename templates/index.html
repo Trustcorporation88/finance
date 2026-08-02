@@ -182,10 +182,20 @@ function render(r, g) {
   html += '<div class="btn-row" style="margin-top:18px">';
   html += '<button class="btn verde" onclick="baixar(\'word\')">📄 Baixar Word</button>';
   html += '<button class="btn vermelho" onclick="baixar(\'pdf\')">📕 Baixar PDF</button>';
-  html += '</div></div>';
+  html += '</div>';
+
+  html += '<div class="chat" style="margin-top:20px; border-top:2px solid var(--borda); padding-top:16px;">';
+  html += '<h4 style="color:var(--azul); font-size:14px; margin-bottom:8px;">💬 Pergunte sobre a sua análise</h4>';
+  html += '<div id="chatMsg" style="max-height:260px; overflow-y:auto; margin-bottom:10px; font-size:13px;"></div>';
+  html += '<div style="display:flex; gap:8px;">';
+  html += '<input id="chatInput" type="text" placeholder="Ex.: projeta os próximos 3 meses? onde posso cortar? separa o que é pessoal do que é da empresa?" style="flex:1; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px;">';
+  html += '<button class="btn" onclick="perguntar()" style="margin-top:0; padding:10px 18px;">Enviar</button>';
+  html += '</div></div></div>';
 
   resultado.innerHTML = html;
   resultado.classList.remove('hidden');
+  const inp = document.getElementById('chatInput');
+  if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') perguntar(); });
 }
 
 function esc(s) {
@@ -208,6 +218,53 @@ async function baixar(formato) {
   a.download = 'raio-x-do-caixa.' + formato;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function chatAdd(quem, texto) {
+  const box = document.getElementById('chatMsg');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.style.margin = '6px 0';
+  div.style.padding = '8px 10px';
+  div.style.borderRadius = '8px';
+  div.style.fontSize = '13px';
+  div.style.whiteSpace = 'pre-wrap';
+  if (quem === 'voce') {
+    div.style.background = '#eef4ee';
+    div.style.textAlign = 'right';
+    div.innerHTML = '<b>Você:</b> ' + esc(texto);
+  } else {
+    div.style.background = '#f7f9fc';
+    div.innerHTML = '<b>IA:</b> ' + esc(texto);
+  }
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function perguntar() {
+  const inp = document.getElementById('chatInput');
+  const pergunta = inp.value.trim();
+  if (!pergunta) return;
+  if (!ultimoResultado) { alert('Analise os dados primeiro.'); return; }
+  inp.value = '';
+  chatAdd('voce', pergunta);
+  chatAdd('ia', 'Pensando...');
+  try {
+    const resp = await fetch('/perguntar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pergunta: pergunta, resumo: ultimoResultado.resumo || '' }),
+    });
+    const data = await resp.json();
+    const box = document.getElementById('chatMsg');
+    if (box) box.lastChild.remove();
+    if (!resp.ok) { chatAdd('ia', 'Erro: ' + (data.erro || 'não foi possível responder.')); return; }
+    chatAdd('ia', data.resposta);
+  } catch (e) {
+    const box = document.getElementById('chatMsg');
+    if (box) box.lastChild.remove();
+    chatAdd('ia', 'Erro de conexão: ' + e.message);
+  }
 }
 </script>
 </body>

@@ -89,3 +89,50 @@ def analisar_numeros(resumo_texto: str, api_key: str = None, modelo: str = None)
 def resumo_texto_seguro(resumo: str) -> str:
     """Usado quando a IA está desativada (sem chave)."""
     return resumo
+
+
+SYSTEM_PROMPT_CHAT = """Você é um CFO fracional / analista financeiro sênior que atende pequenos negócios (dono de PME), em linguagem simples e prática.
+
+O usuário acabou de analisar os dados financeiros dele. Você receberá:
+1. UM RESUMO DOS NÚMEROS CALCULADOS (entradas, saídas, saldo, categorias, fluxo mensal, alertas).
+2. A PERGUNTA do usuário.
+
+REGRAS:
+- Responda SOMENTE com base nos números fornecidos. NUNCA invente valor, projeção ou categoria.
+- Se faltar dado para responder, diga o que falta e sugira o que enviar.
+- Linguagem de dono, não de contador. Números sempre com 'e daí?' (o que significa e o que fazer).
+- Se o usuário pedir projeção ou plano de corte, faça com os números que existem e deixe claro o que é estimativa.
+- Responda em português do Brasil, de forma direta e prática."""
+
+
+def perguntar(resumo_texto: str, pergunta: str, api_key: str = None, modelo: str = None) -> str:
+    """Envia a pergunta do usuário junto com o contexto da análise para a DeepSeek."""
+    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return "IA desativada: configure a chave DEEPSEEK_API_KEY para usar o chat."
+
+    modelo = modelo or os.environ.get("DEEPSEEK_MODEL", MODELO_PADRAO)
+
+    payload = {
+        "model": modelo,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_CHAT},
+            {"role": "user", "content": f"RESUMO DOS NÚMEROS:\n{resumo_texto}\n\nPERGUNTA DO USUÁRIO:\n{pergunta}"},
+        ],
+        "temperature": 0.4,
+        "max_tokens": 1500,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = requests.post(API_URL, headers=headers, json=payload, timeout=90)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        corpo = e.response.text[:400] if e.response is not None else str(e)
+        raise RuntimeError(f"Erro na API DeepSeek (HTTP {e.response.status_code if e.response else '?'}): {corpo}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")

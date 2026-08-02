@@ -106,6 +106,20 @@ def relatorio_pdf():
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="raio-x-do-caixa.pdf")
 
 
+@app.route("/perguntar", methods=["POST"])
+def perguntar():
+    data = request.get_json(force=True)
+    pergunta = (data.get("pergunta") or "").strip()
+    resumo = data.get("resumo") or ""
+    if not pergunta:
+        return jsonify({"erro": "Digite uma pergunta."}), 400
+    try:
+        resposta = deepseek_client.perguntar(resumo, pergunta)
+        return jsonify({"resposta": resposta})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+
 if __name__ == "__main__":
     porta = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=porta, debug=False)
