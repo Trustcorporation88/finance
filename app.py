@@ -106,6 +106,17 @@ def relatorio_pdf():
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="raio-x-do-caixa.pdf")
 
 
+@app.route("/relatorio/pptx", methods=["POST"])
+def relatorio_pptx():
+    data = request.get_json(force=True)
+    resultado = data.get("resultado", {})
+    graf = data.get("graficos", {})
+    buf = relatorio.gerar_pptx(resultado, graf)
+    return send_file(buf,
+                     mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                     as_attachment=True, download_name="raio-x-do-caixa.pptx")
+
+
 @app.route("/perguntar", methods=["POST"])
 def perguntar():
     data = request.get_json(force=True)

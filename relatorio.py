@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Geração de relatórios em Word (.docx) e PDF.
+"""Geração de relatórios em Word (.docx), PDF e PowerPoint (.pptx).
 
 - Word: python-docx, com os gráficos embutidos.
 - PDF: reportlab (platypus), com os gráficos embutidos.
+- PPTX: python-pptx, com os gráficos embutidos.
 """
 from __future__ import annotations
 
@@ -11,6 +12,16 @@ import base64
 
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
+
+try:
+    from pptx import Presentation as PptxPresentation
+    from pptx.util import Inches as PptxInches, Pt as PptxPt
+    from pptx.dml.color import RGBColor as PptxRGBColor
+    from pptx.enum.text import PP_ALIGN
+    from pptx.enum.shapes import MSO_SHAPE
+    PPTX_DISPONIVEL = True
+except ImportError:
+    PPTX_DISPONIVEL = False
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -224,5 +235,174 @@ def gerar_pdf(resultado: dict, graf: dict) -> io.BytesIO:
     elementos.append(Paragraph("Lembrete: é gestão de caixa gerencial. Para imposto/nota fiscal, fale com seu contador.", nota))
 
     doc.build(elementos)
+    buf.seek(0)
+    return buf
+
+
+# ==========================================================================
+# POWERPOINT
+# ==========================================================================
+
+AZUL_P = PptxRGBColor(0x3E, 0x7C, 0x3E)
+VERDE_P = PptxRGBColor(0x1E, 0x8E, 0x3E)
+VERMELHO_P = PptxRGBColor(0xC0, 0x39, 0x2B)
+BRANCO_P = PptxRGBColor(0xFF, 0xFF, 0xFF)
+CINZA_P = PptxRGBColor(0x55, 0x55, 0x55)
+AMARELO_P = PptxRGBColor(0xF3, 0x9C, 0x12)
+CLARO_P = PptxRGBColor(0xE8, 0xF2, 0xE8)
+
+
+def gerar_pptx(resultado: dict, graf: dict) -> io.BytesIO:
+    """Gera uma apresentação .pptx com o raio-x do caixa."""
+    if not PPTX_DISPONIVEL:
+        raise RuntimeError("python-pptx não instalado no servidor.")
+
+    prs = PptxPresentation()
+    prs.slide_width = PptxInches(13.333)
+    prs.slide_height = PptxInches(7.5)
+    blank = prs.slide_layouts[6]
+
+    def novo_slide():
+        return prs.slides.add_slide(blank)
+
+    def caixa(slide, l, t, w, h, cor=None):
+        sh = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(h))
+        if cor is None:
+            sh.fill.background()
+        else:
+            sh.fill.solid()
+            sh.fill.fore_color.rgb = cor
+        sh.line.fill.background()
+        return sh
+
+    def texto(slide, l, t, w, h, conteudo, size=18, bold=False, cor=CINZA_P, align=PP_ALIGN.LEFT):
+        tb = slide.shapes.add_textbox(PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(h))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.alignment = align
+        r = p.add_run()
+        r.text = conteudo
+        r.font.size = PptxPt(size)
+        r.font.bold = bold
+        r.font.color.rgb = cor
+        return tb
+
+    def cabecalho(slide, titulo, sub=None):
+        caixa(slide, 0, 0, 13.333, 0.95, AZUL_P)
+        texto(slide, 0.4, 0.16, 12.5, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
+        if sub:
+            texto(slide, 0.4, 0.55, 12.5, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
+
+    def tabela(slide, l, t, w, rows, col_w=None, font_size=12, header_font=12):
+        nrows = len(rows)
+        ncols = len(rows[0])
+        shp = slide.shapes.add_table(nrows, ncols, PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(0.32 * nrows))
+        tbl = shp.table
+        if col_w:
+            for j, cw in enumerate(col_w):
+                tbl.columns[j].width = PptxInches(cw)
+        for i, row in enumerate(rows):
+            for j, val in enumerate(row):
+                cell = tbl.cell(i, j)
+                cell.text = str(val)
+                for p in cell.text_frame.paragraphs:
+                    for r in p.runs:
+                        r.font.size = PptxPt(header_font if i == 0 else font_size)
+                        r.font.bold = (i == 0)
+                        r.font.color.rgb = BRANCO_P if i == 0 else PptxRGBColor(0x22, 0x22, 0x22)
+                if i == 0:
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = AZUL_P
+        return tbl
+
+    def add_pic(slide, b64, l, t, w):
+        slide.shapes.add_picture(io.BytesIO(_b64_para_bytes(b64)), PptxInches(l), PptxInches(t), width=PptxInches(w))
+
+    def add_linhas(slide, l, t, w, h, linhas, size=14):
+        tb = slide.shapes.add_textbox(PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(h))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        for i, (txt_, bold, cor, sz) in enumerate(linhas):
+            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+            r = p.add_run()
+            r.text = txt_
+            r.font.size = PptxPt(sz)
+            r.font.bold = bold
+            r.font.color.rgb = cor
+            p.space_after = PptxPt(4)
+
+    # ---- Slide 1: capa ----
+    s = novo_slide()
+    caixa(s, 0, 0, 13.333, 7.5, AZUL_P)
+    caixa(s, 0, 4.5, 13.333, 0.06, AMARELO_P)
+    texto(s, 1.0, 2.4, 11.3, 1.0, "RAIO-X DO CAIXA", size=44, bold=True, cor=BRANCO_P)
+    texto(s, 1.0, 3.4, 11.3, 0.7, "Análise automática dos seus dados", size=22, cor=PptxRGBColor(0xDD, 0xFF, 0xDD))
+
+    # ---- Slide 2: essencial ----
+    s = novo_slide()
+    cabecalho(s, "O essencial (em 1 olhada)")
+    margem = f"{resultado.get('margem')}%" if resultado.get("margem") is not None else "não calculável"
+    tabela(s, 0.8, 1.6, 11.0, [
+        ["Entrou", "Saiu", "Sobrou / Faltou", "Margem"],
+        [f"R$ {resultado.get('total_entradas', 0):,.2f}", f"R$ {resultado.get('total_saidas', 0):,.2f}",
+         f"R$ {resultado.get('saldo', 0):,.2f}", margem],
+    ], col_w=[2.75, 2.75, 2.75, 2.75], font_size=13, header_font=12)
+    if graf.get("comparativo"):
+        add_pic(s, graf["comparativo"], 2.0, 3.4, 9.0)
+
+    # ---- Slide 3: pra onde foi ----
+    s = novo_slide()
+    cabecalho(s, "Pra onde foi o dinheiro")
+    total_s = resultado.get("total_saidas", 1) or 1
+    cats = list(resultado.get("gastos_categorias", {}).items())
+    if cats:
+        metade = (len(cats) + 1) // 2
+        esq = cats[:metade]
+        dir_ = cats[metade:]
+        linhas_esq = [["Categoria", "R$", "%"]] + [
+            [c, f"{v:,.2f}", f"{v / total_s * 100:.1f}%"] for c, v in esq
+        ]
+        linhas_dir = [["Categoria", "R$", "%"]] + [
+            [c, f"{v:,.2f}", f"{v / total_s * 100:.1f}%"] for c, v in dir_
+        ]
+        tabela(s, 0.4, 1.4, 6.0, linhas_esq, col_w=[3.2, 1.7, 1.1], font_size=10, header_font=10)
+        tabela(s, 6.9, 1.4, 6.0, linhas_dir, col_w=[3.2, 1.7, 1.1], font_size=10, header_font=10)
+    if graf.get("pizza_gastos"):
+        add_pic(s, graf["pizza_gastos"], 3.3, 5.0, 6.5)
+
+    # ---- Slide 4: fluxo mensal ----
+    if graf.get("fluxo_mensal"):
+        s = novo_slide()
+        cabecalho(s, "Fluxo de caixa por mês")
+        add_pic(s, graf["fluxo_mensal"], 1.7, 1.6, 10.0)
+        if resultado.get("por_mes"):
+            linhas = [["Mês", "Entradas", "Saídas", "Saldo"]]
+            for mes, v in resultado["por_mes"].items():
+                linhas.append([mes, f"R$ {v['entradas']:,.2f}", f"R$ {v['saidas']:,.2f}", f"R$ {v['saldo']:,.2f}"])
+            tabela(s, 1.5, 5.6, 10.0, linhas, col_w=[2.5, 2.5, 2.5, 2.5], font_size=11, header_font=11)
+
+    # ---- Slide 5: alertas ----
+    s = novo_slide()
+    cabecalho(s, "Alertas")
+    alertas = resultado.get("alertas", [])
+    linhas = []
+    for a in alertas:
+        cor = VERMELHO_P if a["nivel"] == "alto" else AMARELO_P
+        linhas.append((f"[{a['nivel'].upper()}] {a['titulo']}", True, cor, 18))
+        linhas.append((a["detalhe"], False, CINZA_P, 14))
+        linhas.append(("", False, CINZA_P, 6))
+    if not linhas:
+        linhas = [("Nenhum alerta automático detectado.", False, VERDE_P, 16)]
+    add_linhas(s, 0.7, 1.5, 12.0, 5.5, linhas, size=14)
+
+    # ---- Slide 6: narrativa IA ----
+    if resultado.get("narrativa_ia"):
+        s = novo_slide()
+        cabecalho(s, "Análise da IA (DeepSeek)")
+        texto(s, 0.6, 1.3, 12.2, 5.8, resultado["narrativa_ia"], size=14)
+
+    buf = io.BytesIO()
+    prs.save(buf)
     buf.seek(0)
     return buf
