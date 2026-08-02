@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CFO de Bolso — Raio-X do Caixa</title>
+<style>
+  :root {
+    --azul: #3E7C3E; --azul2: #5FB15D; --verde: #1E8E3E; --vermelho: #C0392B;
+    --amarelo: #F39C12; --cinza: #555; --bg: #f4f8f4; --borda: #d5e4d5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Calibri, sans-serif; background: var(--bg); color: #222; }
+  header { background: var(--azul); color: #fff; padding: 18px 28px; display: flex; align-items: center; gap: 18px; }
+  header .logo { background: #fff; border-radius: 8px; padding: 6px 12px; height: 52px; display: flex; align-items: center; }
+  header .logo img { height: 38px; width: auto; }
+  header h1 { font-size: 22px; }
+  header p { font-size: 13px; opacity: .85; margin-top: 4px; }
+  main { max-width: 1000px; margin: 24px auto; padding: 0 20px; }
+  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 22px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; color: var(--azul); margin-bottom: 12px; }
+  label { font-size: 13px; font-weight: 600; display: block; margin: 10px 0 6px; }
+  .upload-box { border: 2px dashed var(--borda); border-radius: 8px; padding: 22px; text-align: center; color: #666; transition: .2s; cursor: pointer; }
+  .upload-box.drag { border-color: var(--azul2); background: #eef7ee; }
+  textarea { width: 100%; min-height: 120px; border: 1px solid var(--borda); border-radius: 8px; padding: 10px; font-size: 13px; font-family: Consolas, monospace; resize: vertical; }
+  .btn { background: var(--azul); color: #fff; border: 0; padding: 12px 22px; font-size: 15px; font-weight: 600; border-radius: 8px; cursor: pointer; margin-top: 14px; }
+  .btn:hover { background: var(--azul2); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.verde { background: var(--verde); }
+  .btn.verde:hover { background: #157a33; }
+  .btn.vermelho { background: var(--vermelho); }
+  .btn.cinza { background: var(--cinza); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .status { font-size: 13px; color: var(--cinza); margin-top: 10px; }
+  .status.erro { color: var(--vermelho); font-weight: 600; }
+  #resultado { margin-top: 24px; }
+  .raiox { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 22px; margin-bottom: 16px; }
+  .raiox h3 { color: var(--azul); font-size: 18px; margin-bottom: 8px; }
+  .raiox h4 { color: var(--verde); font-size: 14px; margin: 14px 0 6px; }
+  .essencial { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 14px 0; }
+  .kpi { border: 1px solid var(--borda); border-radius: 8px; padding: 14px; text-align: center; }
+  .kpi .v { font-size: 20px; font-weight: 700; }
+  .kpi .r { font-size: 12px; color: #777; margin-top: 2px; }
+  .verde-c { color: var(--verde); } .vermelho-c { color: var(--vermelho); }
+  .graf { margin: 14px 0; text-align: center; }
+  .graf img { max-width: 100%; border-radius: 8px; border: 1px solid var(--borda); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+  th { background: var(--azul); color: #fff; text-align: left; padding: 8px 10px; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--borda); }
+  tr:nth-child(even) td { background: #f7f9fc; }
+  .alerta { border-left: 4px solid var(--amarelo); background: #fff8ec; padding: 10px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-size: 13px; }
+  .alerta.alto { border-color: var(--vermelho); background: #fdeceb; }
+  .ia { background: #f2f7f2; border: 1px solid #cfe3d3; border-radius: 8px; padding: 16px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  .hidden { display: none; }
+  .nota-ia { font-size: 12px; color: var(--cinza); margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><img src="/static/logo-first.png" alt="First Ambiental"></div>
+  <div>
+    <h1>💼 CFO de Bolso</h1>
+    <p>Subiu sua planilha ou colou os números? Eu devolvo um raio-x do caixa: entrou, saiu, sobrou — e o que fazer. Análise por IA DeepSeek + cálculos automáticos.</p>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <h2>1. Mande seus dados</h2>
+    <label>Arquivo (CSV, Excel, TXT)</label>
+    <div class="upload-box" id="drop">Arraste aqui ou clique para selecionar<br><small>Valores positivos = entradas · negativos = saídas</small></div>
+    <input type="file" id="arquivo" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+    <label>Ou cole os dados em texto <small>(formato: data;descrição;valor ou descrição;valor por linha)</small></label>
+    <textarea id="texto" placeholder="ex.: 05/01/2026;Venda cliente A;3500&#10;08/01/2026;Aluguel;-2500&#10;15/01/2026;Frete;-480"></textarea>
+    <div class="btn-row">
+      <button class="btn" id="btnAnalisar">🔍 Analisar caixa</button>
+    </div>
+    <div class="status hidden" id="status"></div>
+  </div>
+
+  <div id="resultado" class="hidden"></div>
+</main>
+
+<script>
+const drop = document.getElementById('drop');
+const inputArq = document.getElementById('arquivo');
+const textoEl = document.getElementById('texto');
+const btn = document.getElementById('btnAnalisar');
+const status = document.getElementById('status');
+const resultado = document.getElementById('resultado');
+
+let ultimoResultado = null;
+let ultimosGraficos = null;
+
+drop.addEventListener('click', () => inputArq.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('drag');
+  if (e.dataTransfer.files.length) inputArq.files = e.dataTransfer.files;
+});
+inputArq.addEventListener('change', () => {
+  if (inputArq.files.length) drop.innerHTML = '📄 ' + inputArq.files[0].name;
+});
+
+function fmtR(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+btn.addEventListener('click', async () => {
+  const fd = new FormData();
+  if (inputArq.files.length) fd.append('arquivo', inputArq.files[0]);
+  const txt = textoEl.value.trim();
+  if (txt) fd.append('texto', txt);
+  if (!inputArq.files.length && !txt) { mostrar('Escolha um arquivo ou cole os dados.', true); return; }
+
+  btn.disabled = true; mostrar('Analisando... aguarde (a IA pode levar ~30s).', false);
+  try {
+    const resp = await fetch('/analisar', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) { mostrar(data.erro || 'Erro na análise.', true); return; }
+    ultimoResultado = data.resultado;
+    ultimosGraficos = data.graficos;
+    mostrar('');
+    render(data.resultado, data.graficos);
+  } catch (e) {
+    mostrar('Erro de conexão: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function mostrar(msg, erro) {
+  status.textContent = msg;
+  status.classList.toggle('hidden', !msg);
+  status.classList.toggle('erro', !!erro);
+}
+
+function render(r, g) {
+  const saldoCls = r.saldo >= 0 ? 'verde-c' : 'vermelho-c';
+  const margem = r.margem !== null && r.margem !== undefined ? r.margem.toFixed(1) + '%' : 'não calculável';
+
+  let html = '<div class="raiox">';
+  html += '<h3>📊 Raio-X do Caixa</h3>';
+  html += '<div class="essencial">';
+  html += `<div class="kpi"><div class="v verde-c">${fmtR(r.total_entradas)}</div><div class="r">Entrou</div></div>`;
+  html += `<div class="kpi"><div class="v vermelho-c">${fmtR(r.total_saidas)}</div><div class="r">Saiu</div></div>`;
+  html += `<div class="kpi"><div class="v ${saldoCls}">${fmtR(r.saldo)}</div><div class="r">Sobrou / Faltou</div></div>`;
+  html += `<div class="kpi"><div class="v">${margem}</div><div class="r">Margem do período</div></div>`;
+  html += '</div>';
+
+  if (g.comparativo) html += `<div class="graf"><img src="${g.comparativo}" alt="Entradas x Saídas x Saldo"></div>`;
+
+  if (Object.keys(r.gastos_categorias || {}).length) {
+    html += '<h4>📌 Pra onde foi o dinheiro</h4>';
+    html += '<table><tr><th>Categoria</th><th>Valor</th><th>%</th></tr>';
+    const tot = r.total_saidas || 1;
+    for (const [cat, val] of Object.entries(r.gastos_categorias)) {
+      html += `<tr><td>${esc(cat)}</td><td>${fmtR(val)}</td><td>${(val / tot * 100).toFixed(1)}%</td></tr>`;
+    }
+    html += '</table>';
+    if (g.pizza_gastos) html += `<div class="graf"><img src="${g.pizza_gastos}" alt="Gastos por categoria"></div>`;
+  }
+
+  if (g.fluxo_mensal) html += `<div class="graf"><img src="${g.fluxo_mensal}" alt="Fluxo por mês"></div>`;
+
+  if ((r.alertas || []).length) {
+    html += '<h4>⚠️ Alertas automáticos</h4>';
+    for (const a of r.alertas) {
+      html += `<div class="alerta ${a.nivel}"><b>[${a.nivel.toUpperCase()}] ${esc(a.titulo)}</b><br>${esc(a.detalhe)}</div>`;
+    }
+  }
+
+  if (r.narrativa_ia) {
+    html += '<h4>🧠 Análise da IA (DeepSeek)</h4><div class="ia">' + esc(r.narrativa_ia) + '</div>';
+  } else if (r.erro_ia) {
+    html += `<h4>🤖 IA indisponível</h4><div class="alerta alto"><b>Erro:</b> ${esc(r.erro_ia)}</div>`;
+  } else {
+    html += '<div class="nota-ia">ℹ️ A análise por IA está desativada porque não configurei a chave DEEPSEEK_API_KEY. Os números automáticos acima continuam válidos.</div>';
+  }
+
+  html += '<div class="btn-row" style="margin-top:18px">';
+  html += '<button class="btn verde" onclick="baixar(\'word\')">📄 Baixar Word</button>';
+  html += '<button class="btn vermelho" onclick="baixar(\'pdf\')">📕 Baixar PDF</button>';
+  html += '</div></div>';
+
+  resultado.innerHTML = html;
+  resultado.classList.remove('hidden');
+}
+
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function baixar(formato) {
+  if (!ultimoResultado) return;
+  const resp = await fetch('/relatorio/' + formato, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ resultado: ultimoResultado, graficos: ultimosGraficos }),
+  });
+  if (!resp.ok) { alert('Erro ao gerar ' + formato.toUpperCase()); return; }
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'raio-x-do-caixa.' + formato;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
