@@ -171,6 +171,14 @@ function render(r, g) {
     }
   }
 
+  if ((r.divergencias || []).length) {
+    html += '<h4>🔍 Validações de consistência (confira antes de decidir)</h4>';
+    for (const d of r.divergencias) {
+      html += `<div class="alerta ${d.nivel}"><b>[${d.nivel.toUpperCase()}] ${esc(d.titulo)}</b><br>${esc(d.detalhe)}</div>`;
+    }
+    html += '<div class="nota-ia">Estas divergências foram detectadas automaticamente cruzando os seus dados. Vale confirmá-las antes de fechar qualquer decisão.</div>';
+  }
+
   if (r.narrativa_ia) {
     html += '<h4>🧠 Análise da IA (DeepSeek)</h4><div class="ia">' + esc(r.narrativa_ia) + '</div>';
   } else if (r.erro_ia) {

@@ -341,6 +341,53 @@ def calcular(df: pd.DataFrame) -> dict:
             "detalhe": f"'{entradas_cat.index[0]}' representa {entradas_cat.iloc[0] / total_entradas * 100:.0f}% das entradas. Se essa fonte falhar, o caixa sofre.",
         })
 
+    # validações de consistência (divergências potenciais)
+    divergencias = []
+    # 1. Soma das categorias de saída vs total de saídas
+    soma_categorias = gastos_cat.sum()
+    if total_saidas > 0 and abs(soma_categorias - total_saidas) > max(1.0, total_saidas * 0.001):
+        divergencias.append({
+            "nivel": "alto",
+            "titulo": "Categorias não fecham com o total de saídas",
+            "detalhe": f"As categorias somam R$ {soma_categorias:,.2f}, mas o total de saídas é R$ {total_saidas:,.2f} (diferença de R$ {total_saidas - soma_categorias:,.2f}). Confira se há lançamentos sem categoria.",
+        })
+    # 2. Valores sem tipo definido
+    sem_tipo = df[df["tipo"].isna()]
+    if len(sem_tipo):
+        divergencias.append({
+            "nivel": "medio",
+            "titulo": "Lançamentos sem classificação entrada/saída",
+            "detalhe": f"{len(sem_tipo)} lançamento(s) não foram classificados (valor zero ou sem sinal). Eles não entraram no cálculo.",
+        })
+    # 3. Mês com entradas mas saldo mensal inconsistente (bate-sapo por mês)
+    if por_mes:
+        for mes, v in por_mes.items():
+            if v["saidas"] > 0 and v["entradas"] > 0 and v["saldo"] < 0 and total_entradas > 0:
+                pass  # saldo negativo mensal é informação, não divergência
+    # 4. Categoria 'Outros' muito grande
+    if "Outros" in gastos_cat and total_saidas > 0:
+        pct_outros = gastos_cat["Outros"] / total_saidas * 100
+        if pct_outros > 40:
+            divergencias.append({
+                "nivel": "medio",
+                "titulo": "Muitos gastos sem categoria ('Outros')",
+                "detalhe": f"'Outros' representa {pct_outros:.0f}% das saídas. Renomeie as descrições para categorizar melhor.",
+            })
+    # 5. Lançamentos com valor muito alto em relação à mediana (possível erro de digitação)
+    if len(saidas) >= 4 and total_saidas > 0:
+        mediana = saidas["valor"].abs().median()
+        if mediana > 0:
+            outliers = saidas[saidas["valor"].abs() > mediana * 5]
+            if len(outliers):
+                maiores = outliers.sort_values("valor").head(3)
+                for _, row in maiores.iterrows():
+                    desc = str(row.get("descricao", ""))[:60] or "(sem descrição)"
+                    divergencias.append({
+                        "nivel": "medio",
+                        "titulo": "Possível erro de digitação ou valor atípico",
+                        "detalhe": f"'{desc}' = R$ {abs(row['valor']):,.2f} — muito acima da mediana de R$ {mediana:,.2f}. Confira.",
+                    })
+
     return {
         "total_entradas": round(total_entradas, 2),
         "total_saidas": round(total_saidas, 2),
@@ -353,6 +400,7 @@ def calcular(df: pd.DataFrame) -> dict:
         "n_saidas": n_saidas,
         "n_transacoes": len(df),
         "alertas": alertas,
+        "divergencias": divergencias,
         "categorias": {str(k): round(v, 2) for k, v in gastos_cat.items()},
     }
 
@@ -388,4 +436,8 @@ def resumo_para_ia(resultado: dict) -> str:
         linhas.append("- Alertas automáticos detectados:")
         for a in resultado["alertas"]:
             linhas.append(f"    * [{a['nivel'].upper()}] {a['titulo']}: {a['detalhe']}")
+    if resultado.get("divergencias"):
+        linhas.append("- Divergências/validações de consistência:")
+        for d in resultado["divergencias"]:
+            linhas.append(f"    * [{d['nivel'].upper()}] {d['titulo']}: {d['detalhe']}")
     return "\n".join(linhas)
