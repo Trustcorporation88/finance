@@ -92,9 +92,25 @@ def relatorio_word():
     data = request.get_json(force=True)
     resultado = data.get("resultado", {})
     graf = data.get("graficos", {})
+    bloqueio = _checar_bloqueio(resultado)
+    if bloqueio:
+        return jsonify({"erro": bloqueio}), 422
     buf = relatorio.gerar_word(resultado, graf)
     return send_file(buf, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                      as_attachment=True, download_name="raio-x-do-caixa.docx")
+
+
+def _checar_bloqueio(resultado):
+    """Bloqueia download se houver divergência de nível alto que o usuário não confirmou."""
+    divergencias = resultado.get("divergencias", [])
+    criticas = [d for d in divergencias if d.get("nivel") == "alto"]
+    if not criticas:
+        return None
+    if resultado.get("divergencias_confirmadas"):
+        return None
+    titulos = "; ".join(d["titulo"] for d in criticas[:3])
+    return (f"Há divergência(s) crítica(s) não confirmada(s): {titulos}. "
+            f"Revise os dados e confirme a revisão para liberar o download.")
 
 
 @app.route("/relatorio/pdf", methods=["POST"])
@@ -102,6 +118,9 @@ def relatorio_pdf():
     data = request.get_json(force=True)
     resultado = data.get("resultado", {})
     graf = data.get("graficos", {})
+    bloqueio = _checar_bloqueio(resultado)
+    if bloqueio:
+        return jsonify({"erro": bloqueio}), 422
     buf = relatorio.gerar_pdf(resultado, graf)
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="raio-x-do-caixa.pdf")
 
@@ -111,6 +130,9 @@ def relatorio_pptx():
     data = request.get_json(force=True)
     resultado = data.get("resultado", {})
     graf = data.get("graficos", {})
+    bloqueio = _checar_bloqueio(resultado)
+    if bloqueio:
+        return jsonify({"erro": bloqueio}), 422
     buf = relatorio.gerar_pptx(resultado, graf)
     return send_file(buf,
                      mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",

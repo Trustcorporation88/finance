@@ -202,6 +202,21 @@ def ler_texto(texto: str) -> pd.DataFrame:
     if not texto:
         raise ValueError("Cole algum dado primeiro.")
     if "\n" in texto or (";" in texto and len(texto.split(";")) > 1):
+        linhas = [l for l in texto.splitlines() if l.strip()]
+        if linhas:
+            primeira = linhas[0]
+            primeira_min = _normalizar(primeira)
+            # se a primeira linha não parece cabeçalho (não tem palavras de coluna),
+            # adiciona um cabeçalho padrão
+            parece_cabecalho = any(
+                kw in primeira_min for kw in ("data", "descri", "valor", "vlr", "date", "description", "value")
+            )
+            if not parece_cabecalho:
+                ncol = len(primeira.split(";"))
+                if ncol == 3:
+                    texto = "data;descricao;valor\n" + texto
+                elif ncol == 2:
+                    texto = "descricao;valor\n" + texto
         try:
             return ler_dataframe(texto.encode("utf-8"), "dados.csv")
         except Exception:
@@ -359,11 +374,22 @@ def calcular(df: pd.DataFrame) -> dict:
             "titulo": "Lançamentos sem classificação entrada/saída",
             "detalhe": f"{len(sem_tipo)} lançamento(s) não foram classificados (valor zero ou sem sinal). Eles não entraram no cálculo.",
         })
-    # 3. Mês com entradas mas saldo mensal inconsistente (bate-sapo por mês)
+    # 3. Checagem de saldo mensal (saldo anterior + entradas - saídas = saldo final)
     if por_mes:
-        for mes, v in por_mes.items():
-            if v["saidas"] > 0 and v["entradas"] > 0 and v["saldo"] < 0 and total_entradas > 0:
-                pass  # saldo negativo mensal é informação, não divergência
+        meses_ordenados = sorted(por_mes.keys())
+        if len(meses_ordenados) >= 2:
+            for i in range(1, len(meses_ordenados)):
+                mes_ant = meses_ordenados[i - 1]
+                mes_atual = meses_ordenados[i]
+                saldo_ant = por_mes[mes_ant]["saldo"]
+                saldo_esperado = saldo_ant + por_mes[mes_atual]["entradas"] - por_mes[mes_atual]["saidas"]
+                saldo_real = por_mes[mes_atual]["saldo"]
+                if abs(saldo_esperado - saldo_real) > max(1.0, abs(saldo_esperado) * 0.001):
+                    divergencias.append({
+                        "nivel": "alto",
+                        "titulo": f"Saldo de {mes_atual} não fecha com o mês anterior",
+                        "detalhe": f"{mes_ant} fechou em R$ {saldo_ant:,.2f}; com as entradas/saídas de {mes_atual}, o saldo esperado é R$ {saldo_esperado:,.2f}, mas o registrado é R$ {saldo_real:,.2f} (diferença de R$ {saldo_real - saldo_esperado:,.2f}). Pode haver receita faltando ou lançamento errado.",
+                    })
     # 4. Categoria 'Outros' muito grande
     if "Outros" in gastos_cat and total_saidas > 0:
         pct_outros = gastos_cat["Outros"] / total_saidas * 100
@@ -387,6 +413,61 @@ def calcular(df: pd.DataFrame) -> dict:
                         "titulo": "Possível erro de digitação ou valor atípico",
                         "detalhe": f"'{desc}' = R$ {abs(row['valor']):,.2f} — muito acima da mediana de R$ {mediana:,.2f}. Confira.",
                     })
+    # 6. Lançamentos duplicados (mesma data + valor + descrição)
+    try:
+        df_dup = df.copy()
+        chave = ["valor"]
+        if "data" in df.columns and df["data"].notna().any():
+            chave.append("data")
+        if "descricao" in df.columns:
+            chave.append("descricao")
+        duplicados = df_dup[df_dup.duplicated(subset=chave, keep=False)]
+        if len(duplicados):
+            pares = duplicados.groupby(chave).size().sort_values(ascending=False)
+            exemplos = []
+            for idx, contagem in list(pares.items())[:3]:
+                v = idx[0] if isinstance(idx, tuple) else duplicados.iloc[0]["valor"]
+                desc = duplicados.iloc[0].get("descricao", "") if len(chave) == 1 else idx[-1]
+                exemplos.append(f"'{str(desc)[:40]}' = R$ {abs(v):,.2f} ({contagem}x)")
+            divergencias.append({
+                "nivel": "medio",
+                "titulo": "Lançamentos duplicados no extrato",
+                "detalhe": f"{len(duplicados)} linha(s) parecem duplicadas (mesma data+valor+descrição). Ex.: " + "; ".join(exemplos) + ". Confira se o extrato não foi importado 2x.",
+            })
+    except Exception:
+        pass
+
+    # 7. Detecção de unidade (valores misturados: R$, milhares, milhões)
+    if total_entradas > 0 or total_saidas > 0:
+        valores_abs = df["valor"].abs()
+        qtd_baixa = int((valores_abs < 1000).sum())
+        qtd_mil = int(((valores_abs >= 1000) & (valores_abs < 1000000)).sum())
+        qtd_milhao = int((valores_abs >= 1000000).sum())
+        if qtd_milhao > 0 and qtd_baixa > 0 and len(df) >= 6:
+            pct_baixo = qtd_baixa / len(df) * 100
+            if pct_baixo > 10:
+                divergencias.append({
+                    "nivel": "alto",
+                    "titulo": "Valores possivelmente em unidades misturadas",
+                    "detalhe": f"Encontrei {qtd_milhao} lançamento(s) de R$ 1 milhão+ junto com {qtd_baixa} lançamentos pequenos. Confira se alguns valores não estão em 'mil' (ex.: 1.500 = R$ 1,5 mil ou R$ 1.500?) — isso distorce o total.",
+                })
+
+    # 8. Resumo de conferência de dados
+    sem_data = int(df["data"].isna().sum()) if "data" in df.columns else len(df)
+    sem_desc = int(df["descricao"].fillna("").astype(str).str.strip().eq("").sum()) if "descricao" in df.columns else 0
+
+    conferencia = {
+        "lidos": int(len(df)),
+        "entradas": n_entradas,
+        "saidas": n_saidas,
+        "sem_data": sem_data,
+        "sem_descricao": sem_desc,
+        "observacao": "",
+    }
+    if sem_data == len(df):
+        conferencia["observacao"] = "Nenhum lançamento tem data — não foi possível montar o fluxo por mês (só totais)."
+    elif sem_data > 0:
+        conferencia["observacao"] = f"{sem_data} lançamento(s) sem data não entraram no fluxo mensal."
 
     return {
         "total_entradas": round(total_entradas, 2),
@@ -401,6 +482,7 @@ def calcular(df: pd.DataFrame) -> dict:
         "n_transacoes": len(df),
         "alertas": alertas,
         "divergencias": divergencias,
+        "conferencia": conferencia,
         "categorias": {str(k): round(v, 2) for k, v in gastos_cat.items()},
     }
 

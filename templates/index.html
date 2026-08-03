@@ -171,10 +171,30 @@ function render(r, g) {
     }
   }
 
+  if (r.conferencia) {
+    const c = r.conferencia;
+    html += '<h4>📋 Resumo de conferência de dados</h4>';
+    html += '<table><tr><th>Item</th><th>Qtd</th></tr>';
+    html += `<tr><td>Lançamentos lidos</td><td>${c.lidos}</td></tr>`;
+    html += `<tr><td>Entradas</td><td>${c.entradas}</td></tr>`;
+    html += `<tr><td>Saídas</td><td>${c.saidas}</td></tr>`;
+    html += `<tr><td>Sem data</td><td>${c.sem_data}</td></tr>`;
+    html += `<tr><td>Sem descrição</td><td>${c.sem_descricao}</td></tr>`;
+    html += '</table>';
+    if (c.observacao) html += `<div class="nota-ia">${esc(c.observacao)}</div>`;
+  }
+
   if ((r.divergencias || []).length) {
+    const temCritica = r.divergencias.some(d => d.nivel === 'alto');
     html += '<h4>🔍 Validações de consistência (confira antes de decidir)</h4>';
     for (const d of r.divergencias) {
       html += `<div class="alerta ${d.nivel}"><b>[${d.nivel.toUpperCase()}] ${esc(d.titulo)}</b><br>${esc(d.detalhe)}</div>`;
+    }
+    if (temCritica) {
+      html += '<div class="alerta alto"><b>⚠️ Para baixar o relatório, é preciso revisar e confirmar as divergências críticas acima.</b><br>';
+      html += '<label style="margin-top:8px; font-size:13px; display:flex; align-items:center; gap:8px;">';
+      html += '<input type="checkbox" id="confirmarDiv" onchange="divConfirmado(this)"> ';
+      html += 'Li e revisarei as divergências críticas — desejo baixar mesmo assim.</label></div>';
     }
     html += '<div class="nota-ia">Estas divergências foram detectadas automaticamente cruzando os seus dados. Vale confirmá-las antes de fechar qualquer decisão.</div>';
   }
@@ -212,6 +232,11 @@ function esc(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function divConfirmado(cb) {
+  ultimoResultado = ultimoResultado || {};
+  ultimoResultado.divergencias_confirmadas = cb.checked;
+}
+
 async function baixar(formato) {
   if (!ultimoResultado) return;
   const resp = await fetch('/relatorio/' + formato, {
@@ -219,6 +244,15 @@ async function baixar(formato) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ resultado: ultimoResultado, graficos: ultimosGraficos }),
   });
+  if (resp.status === 422) {
+    try {
+      const d = await resp.json();
+      alert('⚠️ ' + (d.erro || 'Divergências críticas precisam ser confirmadas.'));
+    } catch (e) {
+      alert('⚠️ Revise as divergências críticas antes de baixar.');
+    }
+    return;
+  }
   if (!resp.ok) { alert('Erro ao gerar ' + formato.toUpperCase()); return; }
   const blob = await resp.blob();
   const url = URL.createObjectURL(blob);
