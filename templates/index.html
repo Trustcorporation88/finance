@@ -66,6 +66,17 @@
 
 <main>
   <div class="card">
+    <h2>💬 O que você quer fazer com sua planilha?</h2>
+    <p style="font-size:13px; color:#666; margin-bottom:10px;">Escreva aqui o que precisa — ex.: "quero saber se sobra dinheiro no fim do mês", "onde posso cortar gastos", "projeta os próximos 3 meses". Depois suba o arquivo e clique em Analisar.</p>
+    <div id="chatMsg" style="max-height:200px; overflow-y:auto; margin-bottom:10px; font-size:13px; background:#f7f9fc; border:1px solid var(--borda); border-radius:8px; padding:8px;"></div>
+    <div style="display:flex; gap:8px;">
+      <input id="chatInput" type="text" placeholder="Ex.: o que você quer que eu faça com a planilha?" style="flex:1; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px;">
+      <button class="btn" onclick="perguntar()" style="margin-top:0; padding:10px 18px;">Enviar</button>
+    </div>
+    <div class="nota-ia">Você pode conversar antes mesmo de enviar o arquivo. O que escrever aqui vai com contexto para a análise.</div>
+  </div>
+
+  <div class="card">
     <h2>1. Mande seus dados</h2>
     <label>Arquivo (CSV, Excel, TXT)</label>
     <div class="upload-box" id="drop">Arraste aqui ou clique para selecionar<br><small>Valores positivos = entradas · negativos = saídas</small></div>
@@ -103,6 +114,11 @@ inputArq.addEventListener('change', () => {
   if (inputArq.files.length) drop.innerHTML = '📄 ' + inputArq.files[0].name;
 });
 
+// Enter no chat dispara o envio
+document.getElementById('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') perguntar();
+});
+
 function fmtR(v) {
   return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
@@ -112,6 +128,7 @@ btn.addEventListener('click', async () => {
   if (inputArq.files.length) fd.append('arquivo', inputArq.files[0]);
   const txt = textoEl.value.trim();
   if (txt) fd.append('texto', txt);
+  if (intencaoUsuario) fd.append('intencao', intencaoUsuario);
   if (!inputArq.files.length && !txt) { mostrar('Escolha um arquivo ou cole os dados.', true); return; }
 
   btn.disabled = true; mostrar('Analisando... aguarde (a IA pode levar ~30s).', false);
@@ -211,20 +228,10 @@ function render(r, g) {
   html += '<button class="btn verde" onclick="baixar(\'word\')">📄 Baixar Word</button>';
   html += '<button class="btn vermelho" onclick="baixar(\'pdf\')">📕 Baixar PDF</button>';
   html += '<button class="btn" onclick="baixar(\'pptx\')">📊 Baixar PPTX</button>';
-  html += '</div>';
-
-  html += '<div class="chat" style="margin-top:20px; border-top:2px solid var(--borda); padding-top:16px;">';
-  html += '<h4 style="color:var(--azul); font-size:14px; margin-bottom:8px;">💬 Pergunte sobre a sua análise</h4>';
-  html += '<div id="chatMsg" style="max-height:260px; overflow-y:auto; margin-bottom:10px; font-size:13px;"></div>';
-  html += '<div style="display:flex; gap:8px;">';
-  html += '<input id="chatInput" type="text" placeholder="Ex.: projeta os próximos 3 meses? onde posso cortar? separa o que é pessoal do que é da empresa?" style="flex:1; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px;">';
-  html += '<button class="btn" onclick="perguntar()" style="margin-top:0; padding:10px 18px;">Enviar</button>';
-  html += '</div></div></div>';
+  html += '</div></div>';
 
   resultado.innerHTML = html;
   resultado.classList.remove('hidden');
-  const inp = document.getElementById('chatInput');
-  if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') perguntar(); });
 }
 
 function esc(s) {
@@ -284,11 +291,12 @@ function chatAdd(quem, texto) {
   box.scrollTop = box.scrollHeight;
 }
 
+let intencaoUsuario = "";
+
 async function perguntar() {
   const inp = document.getElementById('chatInput');
   const pergunta = inp.value.trim();
   if (!pergunta) return;
-  if (!ultimoResultado) { alert('Analise os dados primeiro.'); return; }
   inp.value = '';
   chatAdd('voce', pergunta);
   chatAdd('ia', 'Pensando...');
@@ -296,13 +304,22 @@ async function perguntar() {
     const resp = await fetch('/perguntar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pergunta: pergunta, resumo: ultimoResultado.resumo || '' }),
+      body: JSON.stringify({
+        pergunta: pergunta,
+        resumo: ultimoResultado?.resumo || '',
+        intencao_antes: !ultimoResultado,
+      }),
     });
     const data = await resp.json();
     const box = document.getElementById('chatMsg');
     if (box) box.lastChild.remove();
     if (!resp.ok) { chatAdd('ia', 'Erro: ' + (data.erro || 'não foi possível responder.')); return; }
     chatAdd('ia', data.resposta);
+    // guarda a intenção do usuário para usar na análise
+    intencaoUsuario = pergunta;
+    if (!ultimoResultado) {
+      chatAdd('ia', '💡 Pronto! Agora suba o arquivo (ou cole os dados) e clique em Analisar caixa — levarei seu pedido em conta.');
+    }
   } catch (e) {
     const box = document.getElementById('chatMsg');
     if (box) box.lastChild.remove();
