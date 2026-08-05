@@ -22,6 +22,16 @@ import relatorio
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
 
+# Permite ser embutido (iframe) por origens confiáveis (ex.: excel.trustcorp.com.br)
+@app.after_request
+def _permitir_iframe(resp):
+    resp.headers.setdefault("X-Frame-Options", "ALLOWALL")
+    resp.headers.setdefault(
+        "Content-Security-Policy",
+        "frame-ancestors 'self' https://excel.trustcorp.com.br http://localhost:* https://*.up.railway.app",
+    )
+    return resp
+
 ALLOWED = {"csv", "xlsx", "xls", "txt"}
 
 
