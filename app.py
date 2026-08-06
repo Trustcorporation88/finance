@@ -23,12 +23,13 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
 
 # Permite ser embutido (iframe) por origens confiáveis (ex.: excel.trustcorp.com.br)
+# IMPORTANTE: NÃO usar X-Frame-Options (valor ALLOWALL é inválido e bloqueia no Chrome).
+# Usar apenas Content-Security-Policy frame-ancestors, que é a forma correta e moderna.
 @app.after_request
 def _permitir_iframe(resp):
-    resp.headers.setdefault("X-Frame-Options", "ALLOWALL")
-    resp.headers.setdefault(
-        "Content-Security-Policy",
-        "frame-ancestors 'self' https://excel.trustcorp.com.br http://localhost:* https://*.up.railway.app",
+    resp.headers.pop("X-Frame-Options", None)
+    resp.headers["Content-Security-Policy"] = (
+        "frame-ancestors 'self' https://excel.trustcorp.com.br"
     )
     return resp
 
