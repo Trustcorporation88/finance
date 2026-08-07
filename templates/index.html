@@ -108,11 +108,29 @@ drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add(
 drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
 drop.addEventListener('drop', e => {
   e.preventDefault(); drop.classList.remove('drag');
-  if (e.dataTransfer.files.length) inputArq.files = e.dataTransfer.files;
+  if (e.dataTransfer.files.length) {
+    inputArq.files = e.dataTransfer.files;
+    avisarArquivoCarregado();
+  }
 });
 inputArq.addEventListener('change', () => {
-  if (inputArq.files.length) drop.innerHTML = '📄 ' + inputArq.files[0].name;
+  if (inputArq.files.length) {
+    drop.innerHTML = '📄 ' + inputArq.files[0].name;
+    avisarArquivoCarregado();
+  }
 });
+textoEl.addEventListener('input', () => {
+  if (textoEl.value.trim().length > 5) avisarArquivoCarregado();
+});
+
+// Informa no chat que um arquivo/dados foi carregado
+function avisarArquivoCarregado() {
+  const temArq = inputArq.files.length > 0;
+  const temTxt = textoEl.value.trim().length > 0;
+  if (!temArq && !temTxt) return;
+  const nome = temArq ? inputArq.files[0].name : 'dados colados';
+  chatAdd('ia', `✅ Recebi o arquivo "${nome}". Agora clique em **Analisar caixa** para eu processar os números e responder com base neles. Se quiser, escreva antes o que deseja que eu faça.`);
+}
 
 // Enter no chat dispara o envio
 document.getElementById('chatInput').addEventListener('keydown', e => {
@@ -140,6 +158,7 @@ btn.addEventListener('click', async () => {
     ultimosGraficos = data.graficos;
     mostrar('');
     render(data.resultado, data.graficos);
+    chatAdd('ia', '✅ Análise concluída! Os números estão prontos acima. Agora pode me perguntar aqui no chat — vou responder com base nos seus dados reais (ex.: "projeta os próximos 3 meses", "onde posso cortar?").');
   } catch (e) {
     mostrar('Erro de conexão: ' + e.message, true);
   } finally {
@@ -293,12 +312,24 @@ function chatAdd(quem, texto) {
 
 let intencaoUsuario = "";
 
+function temArquivoCarregado() {
+  return inputArq.files.length > 0 || textoEl.value.trim().length > 0;
+}
+
 async function perguntar() {
   const inp = document.getElementById('chatInput');
   const pergunta = inp.value.trim();
   if (!pergunta) return;
   inp.value = '';
   chatAdd('voce', pergunta);
+
+  // Se ainda não analisou, mas já tem arquivo carregado, avisa para analisar
+  if (!ultimoResultado && temArquivoCarregado()) {
+    chatAdd('ia', '📄 Vejo que você já carregou o arquivo. Para eu responder com os seus números de verdade, clique em **Analisar caixa** logo abaixo. Depois volte aqui e me pergunte de novo — aí eu uso os dados reais. 😉');
+    intencaoUsuario = pergunta;
+    return;
+  }
+
   chatAdd('ia', 'Pensando...');
   try {
     const resp = await fetch('/perguntar', {
