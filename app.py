@@ -41,15 +41,43 @@ def _arquivo_permitido(nome):
 
 
 def _processar_dados(arquivo_bytes=None, nome_arquivo="", texto=None, intencao=""):
-    """Lê os dados, calcula o raio-x e consulta a IA."""
+    """Lê os dados, calcula o raio-x e consulta a IA.
+
+    Se o arquivo for uma planilha complexa (múltiplas abas, modelo, DRE...),
+    usa a leitura avançada e devolve uma análise estrutural + resposta da IA.
+    """
     if texto:
         df = analise.ler_texto(texto)
-    else:
+        df = analise.categorizar(df)
+        resultado = analise.calcular(df)
+        resumo = analise.resumo_para_ia(resultado)
+        if intencao and intencao.strip():
+            resumo += (
+                "\n\nOBJETIVO DO USUÁRIO (pedido feito antes de enviar os dados): "
+                f"{intencao.strip()}\nResponda a análise priorizando esse pedido, mas mantendo o raio-x completo."
+            )
+        try:
+            narrativa = deepseek_client.analisar_numeros(resumo)
+        except Exception as e:
+            narrativa = None
+            erro_ia = str(e)
+        else:
+            erro_ia = None
+        resultado["narrativa_ia"] = narrativa
+        resultado["erro_ia"] = erro_ia
+        resultado["resumo"] = resumo
+        resultado["graf"] = graficos.gerar_todos(resultado)
+        return df, resultado
+
+    # arquivo
+    try:
         df = analise.ler_dataframe(arquivo_bytes, nome_arquivo)
+    except ValueError:
+        # planilha complexa -> leitura avançada
+        return _processar_planilha_completa(arquivo_bytes, nome_arquivo, intencao)
 
     df = analise.categorizar(df)
     resultado = analise.calcular(df)
-
     resumo = analise.resumo_para_ia(resultado)
     if intencao and intencao.strip():
         resumo += (
@@ -63,12 +91,66 @@ def _processar_dados(arquivo_bytes=None, nome_arquivo="", texto=None, intencao="
         erro_ia = str(e)
     else:
         erro_ia = None
-
     resultado["narrativa_ia"] = narrativa
     resultado["erro_ia"] = erro_ia
     resultado["resumo"] = resumo
     resultado["graf"] = graficos.gerar_todos(resultado)
     return df, resultado
+
+
+def _processar_planilha_completa(arquivo_bytes, nome_arquivo, intencao=""):
+    """Lê a planilha inteira e devolve uma análise estrutural com resposta da IA."""
+    info = analise.ler_planilha_completa(arquivo_bytes, nome_arquivo)
+    estrutura = info["resumo_texto"]
+
+    pergunta = intencao.strip() if intencao and intencao.strip() else (
+        "Faça um resumo executivo desta planilha: o que ela contém, os principais "
+        "números por aba, pontos de atenção e recomendações práticas."
+    )
+    try:
+        narrativa = deepseek_client.perguntar_planilha(estrutura, pergunta)
+        erro_ia = None
+    except Exception as e:
+        narrativa = None
+        erro_ia = str(e)
+
+    resultado = {
+        "tipo_analise": "planilha_completa",
+        "total_entradas": 0,
+        "total_saidas": 0,
+        "saldo": 0,
+        "margem": None,
+        "gastos_categorias": {},
+        "entradas_categorias": {},
+        "por_mes": None,
+        "n_entradas": 0,
+        "n_saidas": 0,
+        "n_transacoes": info["n_abas"],
+        "alertas": [{
+            "nivel": "medio",
+            "titulo": "Planilha com múltiplas abas",
+            "detalhe": f"Esta planilha tem {info['n_abas']} abas e foi analisada como um modelo completo (não um extrato simples). As abas são: {', '.join(a['nome'] for a in info['abas'][:8])}.",
+        }],
+        "divergencias": [],
+        "conferencia": {
+            "lidos": info["n_abas"],
+            "entradas": 0,
+            "saidas": 0,
+            "sem_data": 0,
+            "sem_descricao": 0,
+            "observacao": "Planilha completa com múltiplas abas — análise estrutural via IA.",
+        },
+        "narrativa_ia": narrativa,
+        "erro_ia": erro_ia,
+        "resumo": estrutura,
+        "graf": {},
+        "planilha_info": {
+            "n_abas": info["n_abas"],
+            "abas": [a["nome"] for a in info["abas"]],
+            "estrutura": estrutura,
+        },
+    }
+    return None, resultado
 
 
 @app.route("/")
@@ -161,10 +243,14 @@ def perguntar():
     data = request.get_json(force=True)
     pergunta = (data.get("pergunta") or "").strip()
     resumo = data.get("resumo") or ""
+    estrutura = data.get("estrutura") or ""
     if not pergunta:
         return jsonify({"erro": "Digite uma pergunta."}), 400
     try:
-        resposta = deepseek_client.perguntar(resumo, pergunta)
+        if estrutura:
+            resposta = deepseek_client.perguntar_planilha(estrutura, pergunta)
+        else:
+            resposta = deepseek_client.perguntar(resumo, pergunta)
         return jsonify({"resposta": resposta})
     except Exception as e:
         return jsonify({"erro": str(e)}), 500

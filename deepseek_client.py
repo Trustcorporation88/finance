@@ -136,3 +136,51 @@ def perguntar(resumo_texto: str, pergunta: str, api_key: str = None, modelo: str
         raise RuntimeError(f"Erro na API DeepSeek (HTTP {e.response.status_code if e.response else '?'}): {corpo}")
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")
+
+
+SYSTEM_PROMPT_PLANILHA = """Você é um analista financeiro e de planilhas sênior que ajuda donos de PME.
+
+O usuário enviou uma PLANILHA COMPLETA (pode ter várias abas: orçamentos, DRE, fluxo de caixa, cenários, clientes, pessoal, etc.). Você receberá:
+1. A ESTRUTURA da planilha (abas, cabeçalhos, amostra de dados de cada aba).
+2. A PERGUNTA do usuário sobre essa planilha.
+
+REGRAS:
+- Responda COM BASE na estrutura e nos dados fornecidos da planilha. Não invente números que não estão visíveis.
+- Se a pergunta pedir um número que está em uma aba, procure na amostra/estrutura e cite de qual aba veio.
+- Se não houver dados suficientes para responder com precisão, diga o que está vendo e o que faltaria para responder melhor.
+- Linguagem de dono de empresa, simples e prática, em português do Brasil.
+- Se a planilha tem cenários, comparações ou métricas (EBITDA, margem, caixa), explique o que significam em linguagem simples.
+- Seja útil: além de responder, aponte se há algo relevante (risco, inconsistência, destaque)."""
+
+
+def perguntar_planilha(estrutura_texto: str, pergunta: str, api_key: str = None, modelo: str = None) -> str:
+    """Responde perguntas sobre uma planilha completa (múltiplas abas)."""
+    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return "IA desativada: configure a chave DEEPSEEK_API_KEY para usar o chat."
+
+    modelo = modelo or os.environ.get("DEEPSEEK_MODEL", MODELO_PADRAO)
+
+    payload = {
+        "model": modelo,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_PLANILHA},
+            {"role": "user", "content": "ESTRUTURA DA PLANILHA:\n" + estrutura_texto + "\n\nPERGUNTA DO USUÁRIO:\n" + pergunta},
+        ],
+        "temperature": 0.4,
+        "max_tokens": 2000,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = requests.post(API_URL, headers=headers, json=payload, timeout=120)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        corpo = e.response.text[:400] if e.response is not None else str(e)
+        raise RuntimeError(f"Erro na API DeepSeek (HTTP {e.response.status_code if e.response else '?'}): {corpo}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")

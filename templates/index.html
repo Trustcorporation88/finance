@@ -332,14 +332,19 @@ async function perguntar() {
 
   chatAdd('ia', 'Pensando...');
   try {
+    const payload = {
+      pergunta: pergunta,
+      resumo: ultimoResultado?.resumo || '',
+      intencao_antes: !ultimoResultado,
+    };
+    // se for análise de planilha completa, envia a estrutura também
+    if (ultimoResultado?.planilha_info?.estrutura) {
+      payload.estrutura = ultimoResultado.planilha_info.estrutura;
+    }
     const resp = await fetch('/perguntar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pergunta: pergunta,
-        resumo: ultimoResultado?.resumo || '',
-        intencao_antes: !ultimoResultado,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await resp.json();
     const box = document.getElementById('chatMsg');

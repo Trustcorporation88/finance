@@ -531,3 +531,78 @@ def resumo_para_ia(resultado: dict) -> str:
         for d in resultado["divergencias"]:
             linhas.append(f"    * [{d['nivel'].upper()}] {d['titulo']}: {d['detalhe']}")
     return "\n".join(linhas)
+
+
+# --------------------------------------------------------------------------
+# 4. LEITURA AVANÇADA: planilhas complexas (modelos com várias abas)
+# --------------------------------------------------------------------------
+
+def ler_planilha_completa(arquivo: bytes, nome_arquivo: str = "") -> dict:
+    """Lê uma planilha completa (todas as abas) e devolve um resumo estruturado.
+
+    Serve para arquivos que não são extratos simples (ex.: modelos com várias
+    abas, orçamentos, DRE, planos financeiros). Devolve um dict com as abas,
+    colunas, amostras de dados e totais — pronto para a IA interpretar.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(arquivo), data_only=True, read_only=True)
+    abas_info = []
+    for sn in wb.sheetnames:
+        ws = wb[sn]
+        linhas = []
+        max_cols = 0
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            if i > 30:
+                break
+            vals = []
+            for v in row:
+                if v is None:
+                    vals.append("")
+                elif isinstance(v, float) and v == int(v):
+                    vals.append(str(int(v)))
+                else:
+                    vals.append(str(v))
+            vals = [v for v in vals if v != ""]
+            if not vals:
+                continue
+            linhas.append(vals)
+            max_cols = max(max_cols, len(vals))
+        # extrai cabeçalhos (primeiras linhas não vazias)
+        cabecalhos = []
+        for l in linhas[:5]:
+            cabecalhos.append(l)
+        # amostra de dados (linhas depois dos cabeçalhos)
+        amostra = linhas[5:15]
+        abas_info.append({
+            "nome": sn,
+            "linhas_lidas": len(linhas),
+            "colunas_max": max_cols,
+            "cabecalhos": cabecalhos,
+            "amostra": amostra,
+        })
+    wb.close()
+
+    # monta o texto-resumo da planilha para a IA
+    texto = (
+        f"ARQUIVO: {nome_arquivo or 'planilha.xlsx'}\n"
+        f"É uma PLANILHA COMPLETA com {len(abas_info)} aba(s). Não é um extrato simples "
+        "de transações; é um modelo/relatório com múltiplas abas.\n\n"
+        "ESTRUTURA DAS ABAS:\n"
+    )
+    for a in abas_info:
+        texto += f"\n--- ABA: {a['nome']} ({a['linhas_lidas']} linhas, {a['colunas_max']} colunas) ---\n"
+        texto += "Cabeçalhos/detalhes:\n"
+        for c in a["cabecalhos"]:
+            texto += "  " + " | ".join(c) + "\n"
+        if a["amostra"]:
+            texto += "Amostra de dados:\n"
+            for c in a["amostra"]:
+                texto += "  " + " | ".join(c) + "\n"
+
+    return {
+        "tipo": "planilha_completa",
+        "n_abas": len(abas_info),
+        "abas": abas_info,
+        "resumo_texto": texto,
+    }
