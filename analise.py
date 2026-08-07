@@ -165,14 +165,22 @@ def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame()
     out["valor_raw"] = df[col_valor]
     out["valor"] = out["valor_raw"].apply(_parse_valor)
-    out["descricao"] = (df[col_desc] if col_desc else "").fillna("")
-    out["data"] = (df[col_data] if col_data else None)
+    if col_desc:
+        out["descricao"] = df[col_desc].fillna("")
+    else:
+        out["descricao"] = ""
+    out["data"] = (df[col_data] if col_data else pd.Series([None] * len(out), index=out.index))
     if col_data:
         out["data"] = out["data"].apply(_parse_data)
-    out["tipo_col"] = (df[col_tipo] if col_tipo else None)
     if col_tipo:
+        out["tipo_col"] = df[col_tipo]
         out["tipo_col"] = out["tipo_col"].apply(lambda x: _normalizar(str(x)))
-    out["categoria"] = (df[col_desc] if col_desc else "")  # preenchida depois
+    else:
+        out["tipo_col"] = pd.Series([None] * len(out), index=out.index)
+    if col_desc:
+        out["categoria"] = df[col_desc].fillna("")
+    else:
+        out["categoria"] = ""
     out = out.dropna(subset=["valor"])
     out = out[out["valor"] != 0]
     out = out.reset_index(drop=True)
