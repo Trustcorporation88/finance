@@ -640,6 +640,9 @@ def ler_aba_especifica(arquivo: bytes, nome_arquivo: str, aba_nome: str) -> dict
             linhas.append(vals)
     wb.close()
 
+    cabecalhos = linhas[:5]
+    amostra = linhas[5:15]
+
     texto = f"ABA: {aba_nome} ({len(linhas)} linhas)\n"
     for l in linhas[:40]:
         texto += "  " + " | ".join(l)[:200] + "\n"
@@ -649,6 +652,13 @@ def ler_aba_especifica(arquivo: bytes, nome_arquivo: str, aba_nome: str) -> dict
         "aba": aba_nome,
         "linhas": linhas[:40],
         "resumo_texto": texto,
+        "abas": [{
+            "nome": aba_nome,
+            "linhas_lidas": len(linhas),
+            "colunas_max": max((len(l) for l in linhas), default=0),
+            "cabecalhos": cabecalhos,
+            "amostra": amostra,
+        }],
     }
 
 

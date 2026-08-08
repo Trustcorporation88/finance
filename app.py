@@ -376,7 +376,11 @@ def analisar_aba():
             "erro_ia": erro_ia,
             "resumo": estrutura,
             "graf": {},
-            "planilha_info": {"n_abas": 1, "abas": [{"nome": aba}], "estrutura": estrutura},
+            "planilha_info": {
+                "n_abas": 1,
+                "abas": info.get("abas") or [{"nome": aba}],
+                "estrutura": estrutura,
+            },
         }
         return jsonify({"resultado": resultado, "graficos": {}})
     except ValueError as e:
