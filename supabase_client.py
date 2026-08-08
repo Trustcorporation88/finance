@@ -12,8 +12,10 @@ import json
 import time
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
-SUPABASE_SERVICE_ROLE = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+# Chaves antigas (legado): SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY
+# Chaves novas (Supabase 2025+): SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY
+SUPABASE_ANON_KEY = (os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")).strip()
+SUPABASE_SERVICE_ROLE = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SECRET_KEY", "")).strip()
 
 ATIVO = bool(SUPABASE_URL and SUPABASE_ANON_KEY)
 
