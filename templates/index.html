@@ -267,12 +267,15 @@
 </main>
 
 <!-- tela de carregamento -->
-<div id="overlay" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.5); backdrop-filter:blur(6px); z-index:999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;">
+<div id="overlay" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,.5); backdrop-filter:blur(6px); z-index:999; flex-direction:column; align-items:center; justify-content:center; gap:18px;">
   <div style="width:60px; height:60px; border-radius:50%; border:5px solid rgba(255,255,255,.2); border-top-color:#fff; animation:spin 1s linear infinite;"></div>
   <div style="color:#fff; font-family:'Sora',sans-serif; font-weight:700; font-size:18px; text-align:center;" id="overlayMsg">Analisando...</div>
   <div style="color:rgba(255,255,255,.8); font-size:13px;">A IA pode levar ~30 segundos</div>
 </div>
-<style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+<style>
+  #overlay:not(.hidden) { display: flex; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
 
 <script>
 const drop = document.getElementById('drop');
