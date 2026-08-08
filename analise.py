@@ -697,3 +697,85 @@ def preparar_previsao(resultado: dict) -> str:
         for c, v in list(resultado["gastos_categorias"].items())[:8]:
             linhas.append(f"  {c}: R$ {v:,.2f}")
     return "\n".join(linhas)
+
+
+
+# --------------------------------------------------------------------------
+# 6. FORMATOS DE EXTRATO BANCÁRIO: OFX e QIF
+# --------------------------------------------------------------------------
+
+def ler_ofx(texto: str) -> pd.DataFrame:
+    """Converte um extrato OFX (banco) em DataFrame de lançamentos."""
+    import xml.etree.ElementTree as ET
+
+    lanctos = []
+    # OFX usa <STMTTRN> com TRNTYPE, DTPOSTED, TRNAMT, MEMO
+    for bloco in re.findall(r"<STMTTRN>.*?</STMTTRN>", texto, re.DOTALL):
+        def pega(tag):
+            m = re.search(rf"<{tag}>([^<]*)</{tag}>", bloco)
+            return m.group(1).strip() if m else ""
+        amt = pega("TRNAMT")
+        memo = pega("MEMO") or pega("NAME")
+        data = pega("DTPOSTED")
+        try:
+            valor = float(amt)
+        except ValueError:
+            continue
+        lanctos.append({"valor": valor, "descricao": memo, "data": data[:8] if len(data) >= 8 else None})
+    if not lanctos:
+        raise ValueError("Não consegui ler o extrato OFX. Verifique se o arquivo é um OFX válido.")
+    df = pd.DataFrame(lanctos)
+    df["data"] = df["data"].apply(_parse_data)
+    return _normalizar_df(df)
+
+
+def ler_qif(texto: str) -> pd.DataFrame:
+    """Converte um extrato QIF em DataFrame de lançamentos."""
+    lanctos = []
+    atual = {}
+    for linha in texto.splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        cod = linha[0]
+        val = linha[1:]
+        if cod == "D":   # data
+            atual["data"] = val
+        elif cod == "T": # valor
+            try:
+                atual["valor"] = float(val.replace(",", "."))
+            except ValueError:
+                pass
+        elif cod in ("P", "N"):  # descrição / categoria
+            atual["descricao"] = val
+        elif cod == "^": # fim do registro
+            if "valor" in atual:
+                lanctos.append({
+                    "valor": atual.get("valor"),
+                    "descricao": atual.get("descricao", ""),
+                    "data": atual.get("data"),
+                })
+            atual = {}
+    if not lanctos:
+        raise ValueError("Não consegui ler o extrato QIF. Verifique o arquivo.")
+    df = pd.DataFrame(lanctos)
+    df["data"] = df["data"].apply(_parse_data)
+    return _normalizar_df(df)
+
+
+def preparar_orcado_realizado(orcado: dict, realizado: dict) -> str:
+    """Monta contexto para IA comparar orçado x realizado."""
+    linhas = [
+        "COMPARAÇÃO ORÇADO x REALIZADO.",
+        "",
+        "ORÇADO (planejado):",
+    ]
+    for k, v in (orcado.get("gastos_categorias", {}) or {}).items():
+        linhas.append(f"  {k}: R$ {v:,.2f}")
+    linhas.append(f"  Total orçado saídas: R$ {orcado.get('total_saidas',0):,.2f}")
+    linhas.append("")
+    linhas.append("REALIZADO (real):")
+    for k, v in (realizado.get("gastos_categorias", {}) or {}).items():
+        linhas.append(f"  {k}: R$ {v:,.2f}")
+    linhas.append(f"  Total realizado saídas: R$ {realizado.get('total_saidas',0):,.2f}")
+    return "\n".join(linhas)

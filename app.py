@@ -9,9 +9,15 @@ from __future__ import annotations
 import os
 import io
 import re
+import json
+import time
+import time as _time
+import hmac
+import hashlib
+import collections
 import traceback
 
-from flask import Flask, request, render_template, jsonify, send_file
+from flask import Flask, request, render_template, jsonify, send_file, session
 from werkzeug.utils import secure_filename
 
 import analise
@@ -21,6 +27,13 @@ import relatorio
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
+# Sessão: usa chave do ambiente (segura) ou gera uma estável em memória
+app.secret_key = os.environ.get("APP_SECRET_KEY", "cfo-bolso-dev-secret-key-troque-em-producao")
+
+# Auth simples: ADMIN_USER + ADMIN_PASSWORD via ambiente (opcional)
+ADMIN_USER = os.environ.get("ADMIN_USER", "").strip()
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "").strip()
+AUTH_ATIVO = bool(ADMIN_USER and ADMIN_PASSWORD)
 
 # Permite ser embutido (iframe) por origens confiáveis (ex.: excel.trustcorp.com.br)
 # IMPORTANTE: NÃO usar X-Frame-Options (valor ALLOWALL é inválido e bloqueia no Chrome).
@@ -33,11 +46,44 @@ def _permitir_iframe(resp):
     )
     return resp
 
-ALLOWED = {"csv", "xlsx", "xls", "txt"}
+# formatos aceitos para upload; XLSM (com macros) é bloqueado por segurança
+ALLOWED = {"csv", "xlsx", "xls", "txt", "ofx", "qif"}
+BLOCKED_EXTS = {"xlsm"}
 
 
 def _arquivo_permitido(nome):
-    return "." in nome and nome.rsplit(".", 1)[1].lower() in ALLOWED
+    ext = nome.rsplit(".", 1)[-1].lower() if "." in nome else ""
+    if ext in BLOCKED_EXTS:
+        return False
+    return ext in ALLOWED
+
+
+def _usuario_atual():
+    """Devolve o nome do usuário logado (ou 'anonimo' se auth desativado)."""
+    if AUTH_ATIVO:
+        return session.get("usuario", "")
+    return "anonimo"
+
+
+def _exigir_auth():
+    """Retorna erro se auth ativo e usuário não logado."""
+    if AUTH_ATIVO and not _usuario_atual():
+        return jsonify({"erro": "Faça login para continuar.", "precisa_login": True}), 401
+    return None
+
+
+# ---------- histórico por usuário (em memória, com limite) ----------
+HISTORICOS = collections.defaultdict(list)   # usuario -> lista de análises
+
+
+def _salvar_historico(usuario, item):
+    HISTORICOS[usuario].insert(0, item)
+    if len(HISTORICOS[usuario]) > 30:
+        HISTORICOS[usuario] = HISTORICOS[usuario][:30]
+
+
+def _listar_historico(usuario):
+    return HISTORICOS.get(usuario, [])
 
 
 def _processar_dados(arquivo_bytes=None, nome_arquivo="", texto=None, intencao=""):
@@ -70,8 +116,14 @@ def _processar_dados(arquivo_bytes=None, nome_arquivo="", texto=None, intencao="
         return df, resultado
 
     # arquivo
+    ext = (nome_arquivo or "").lower().rsplit(".", 1)[-1]
     try:
-        df = analise.ler_dataframe(arquivo_bytes, nome_arquivo)
+        if ext == "ofx":
+            df = analise.ler_ofx(arquivo_bytes.decode("utf-8", errors="replace"))
+        elif ext == "qif":
+            df = analise.ler_qif(arquivo_bytes.decode("utf-8", errors="replace"))
+        else:
+            df = analise.ler_dataframe(arquivo_bytes, nome_arquivo)
     except ValueError:
         # planilha complexa -> leitura avançada
         return _processar_planilha_completa(arquivo_bytes, nome_arquivo, intencao)
@@ -175,8 +227,19 @@ def analisar():
         if not texto and not arquivo_bytes:
             return jsonify({"erro": "Envie um arquivo ou cole os dados em texto."}), 400
 
+        bloqueio = _exigir_auth()
+        if bloqueio:
+            return bloqueio
         df, resultado = _processar_dados(arquivo_bytes, nome_arquivo, texto, intencao)
         resultado.setdefault("nome_arquivo", nome_arquivo or "texto-colado.txt")
+        # salva no histórico do usuário
+        _salvar_historico(_usuario_atual(), {
+            "id": int(time.time() * 1000),
+            "nome": resultado.get("nome_arquivo", "análise"),
+            "tipo": resultado.get("tipo_analise", "extrato"),
+            "data": time.strftime("%d/%m/%Y %H:%M"),
+            "resultado": resultado,
+        })
         # remove gráficos pesados do JSON (são montados no HTML)
         graf = resultado.pop("graf", {})
         return jsonify({"resultado": resultado, "graficos": graf})
@@ -355,6 +418,53 @@ def previsao():
         return jsonify({"erro": str(e)}), 500
 
 
+
+
+@app.route("/orcado-realizado", methods=["POST"])
+def orcado_realizado():
+    """Compara orçado x realizado (duas análises) e a IA aponta desvios."""
+    data = request.get_json(force=True)
+    orcado = data.get("orcado", {})
+    realizado = data.get("realizado", {})
+    if not orcado or not realizado:
+        return jsonify({"erro": "Envie orçado e realizado."}), 400
+    try:
+        contexto = analise.preparar_orcado_realizado(orcado, realizado)
+        resposta = deepseek_client.analisar_numeros(
+            contexto + "\n\nResponda como auditor: aponte os maiores desvios (em R$ e %), o que estourou, o que ficou abaixo e recomendações."
+        )
+        return jsonify({"resposta": resposta, "contexto": contexto})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/alerta-caixa", methods=["POST"])
+def alerta_caixa():
+    """Analisa se o caixa projetado corre risco de ficar negativo."""
+    data = request.get_json(force=True)
+    resultado = data.get("resultado", {})
+    saldo = resultado.get("saldo", 0)
+    total_sai = resultado.get("total_saidas", 0)
+    por_mes = resultado.get("por_mes") or {}
+    alertas = []
+    for mes, v in por_mes.items():
+        if v.get("saldo", 0) < 0:
+            alertas.append(f"{mes}: saldo {v['saldo']:,.2f} NEGATIVO")
+    nivel = "verde"
+    mensagem = f"Saldo do período: R$ {saldo:,.2f}. "
+    if saldo < 0:
+        nivel = "vermelho"
+        mensagem += "O caixa está NEGATIVO."
+    elif total_sai > 0 and saldo < total_sai * 0.15:
+        nivel = "amarelo"
+        mensagem += "O caixa está apertado (menos de 15% das saídas de reserva)."
+    else:
+        mensagem += "O caixa está saudável."
+    if alertas:
+        nivel = "vermelho"
+        mensagem += " Meses com saldo negativo: " + "; ".join(alertas)
+    return jsonify({"nivel": nivel, "mensagem": mensagem, "meses_negativos": alertas})
+
 @app.route("/relatorio/planilha/<formato>", methods=["POST"])
 def relatorio_planilha(formato):
     """Downloads para planilhas completas (multi-abas). Formatos: pptx, word, pdf, xlsx."""
@@ -386,10 +496,68 @@ def relatorio_planilha(formato):
         return jsonify({"erro": f"Erro ao gerar: {e}"}), 500
 
 
-# ---------- logs de uso (simples, em memória) ----------
-import collections
-import time as _time
+# ---------- autenticação ----------
+@app.route("/auth/status", methods=["GET"])
+def auth_status():
+    return jsonify({"ativo": AUTH_ATIVO, "logado": bool(_usuario_atual())})
 
+
+@app.route("/auth/login", methods=["POST"])
+def auth_login():
+    data = request.get_json(force=True)
+    user = (data.get("usuario") or "").strip()
+    senha = (data.get("senha") or "").strip()
+    if not AUTH_ATIVO:
+        return jsonify({"ok": True, "logado": True})
+    # comparação segura (constant-time)
+    ok_user = hmac.compare_digest(user, ADMIN_USER)
+    ok_senha = hmac.compare_digest(senha, ADMIN_PASSWORD)
+    if ok_user and ok_senha:
+        session["usuario"] = user
+        return jsonify({"ok": True, "logado": True, "usuario": user})
+    return jsonify({"ok": False, "erro": "Usuário ou senha inválidos."}), 401
+
+
+@app.route("/auth/logout", methods=["POST"])
+def auth_logout():
+    session.pop("usuario", None)
+    return jsonify({"ok": True})
+
+
+@app.route("/historico", methods=["GET"])
+def historico():
+    bloqueio = _exigir_auth()
+    if bloqueio:
+        return bloqueio
+    itens = _listar_historico(_usuario_atual())
+    resumo = [{
+        "id": i["id"], "nome": i["nome"], "tipo": i["tipo"], "data": i["data"],
+    } for i in itens]
+    return jsonify({"itens": resumo})
+
+
+@app.route("/historico/<int:hid>", methods=["GET"])
+def historico_item(hid):
+    bloqueio = _exigir_auth()
+    if bloqueio:
+        return bloqueio
+    for i in _listar_historico(_usuario_atual()):
+        if i["id"] == hid:
+            return jsonify({"resultado": i["resultado"]})
+    return jsonify({"erro": "Análise não encontrada."}), 404
+
+
+@app.route("/historico/<int:hid>", methods=["DELETE"])
+def historico_delete(hid):
+    bloqueio = _exigir_auth()
+    if bloqueio:
+        return bloqueio
+    hist = HISTORICOS.get(_usuario_atual(), [])
+    HISTORICOS[_usuario_atual()] = [i for i in hist if i["id"] != hid]
+    return jsonify({"ok": True})
+
+
+# ---------- logs de uso (simples, em memória) ----------
 USO = collections.Counter()          # contagem por tipo de ação
 USO_IP = collections.Counter()       # contagem por IP
 USO_DETALHES = []                     # últimas ações

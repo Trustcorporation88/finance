@@ -89,12 +89,24 @@
     <p>Suba sua planilha ou cole os números e receba o raio-x do caixa — com IA, gráficos e downloads.</p>
   </div>
   <div class="topbar">
+    <span id="usuarioInfo" class="hidden" style="font-size:12px; color:#fff; opacity:.9"></span>
     <button class="theme-btn" id="btnTema" onclick="alternarTema()">🌙 Escuro</button>
     <button class="uso-btn" onclick="verUso()">📊 Uso</button>
+    <button class="uso-btn hidden" id="btnLogout" onclick="logout()">🚪 Sair</button>
   </div>
 </header>
 
 <main>
+  <div class="card hidden" id="cardLogin">
+    <h2>🔐 Acesso</h2>
+    <label>Usuário</label>
+    <input id="loginUser" type="text" style="width:100%; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px; background:var(--surface); color:var(--texto);">
+    <label>Senha</label>
+    <input id="loginSenha" type="password" style="width:100%; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px; background:var(--surface); color:var(--texto);">
+    <div class="btn-row"><button class="btn" onclick="login()">Entrar</button></div>
+    <div class="status hidden" id="loginStatus"></div>
+  </div>
+
   <div class="card">
     <h2>💬 O que você quer fazer com sua planilha?</h2>
     <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Conversa com contexto — você pode perguntar antes e depois de analisar. A IA lembra do que conversou.</p>
@@ -111,12 +123,13 @@
     <div class="btn-row" style="margin-bottom:10px">
       <button class="btn verde" onclick="mostrarModo('simples')" id="btnModoSimples" style="margin-top:0; padding:8px 14px; font-size:13px;">Analisar caixa</button>
       <button class="btn" onclick="mostrarModo('comparar')" id="btnModoComparar" style="margin-top:0; padding:8px 14px; font-size:13px;">Comparar 2 planilhas</button>
+      <button class="btn" onclick="mostrarModo('orcado')" id="btnModoOrcado" style="margin-top:0; padding:8px 14px; font-size:13px;">Orçado × Realizado</button>
     </div>
 
     <div id="modoSimples">
-      <label>Arquivo (CSV, Excel, TXT) — pode ser uma planilha completa de várias abas</label>
+      <label>Arquivo (CSV, Excel, TXT, OFX/QIF de banco) — pode ser uma planilha completa de várias abas</label>
       <div class="upload-box" id="drop">Arraste aqui ou clique para selecionar<br><small>Valores positivos = entradas · negativos = saídas</small></div>
-      <input type="file" id="arquivo" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+      <input type="file" id="arquivo" class="hidden" accept=".csv,.xlsx,.xls,.txt,.ofx,.qif">
       <label>Ou cole os dados em texto <small>(formato: data;descrição;valor)</small></label>
       <textarea id="texto" placeholder="ex.: 05/01/2026;Venda cliente A;3500&#10;08/01/2026;Aluguel;-2500"></textarea>
       <div id="seletorAbas" class="hidden" style="margin-top:10px">
@@ -126,6 +139,7 @@
       <div class="btn-row">
         <button class="btn" id="btnAnalisar">🔍 Analisar caixa</button>
         <button class="btn verde hidden" id="btnPrever">📈 Prever próximos 3 meses</button>
+        <button class="btn amarelo hidden" id="btnAlerta" onclick="verAlertaCaixa()" style="background:var(--amarelo)">⚠️ Saúde do caixa</button>
       </div>
       <div class="status hidden" id="status"></div>
     </div>
@@ -133,21 +147,34 @@
     <div id="modoComparar" class="hidden">
       <label>Planilha 1</label>
       <div class="upload-box" id="drop1">Arraste aqui ou clique para selecionar</div>
-      <input type="file" id="arquivo1" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+      <input type="file" id="arquivo1" class="hidden" accept=".csv,.xlsx,.xls,.txt,.ofx,.qif">
       <label>Planilha 2</label>
       <div class="upload-box" id="drop2">Arraste aqui ou clique para selecionar</div>
-      <input type="file" id="arquivo2" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+      <input type="file" id="arquivo2" class="hidden" accept=".csv,.xlsx,.xls,.txt,.ofx,.qif">
       <div class="btn-row">
         <button class="btn" id="btnComparar">≠ Comparar planilhas</button>
       </div>
       <div class="status hidden" id="statusCmp"></div>
+    </div>
+
+    <div id="modoOrcado" class="hidden">
+      <label>Orçado (planilha ou texto)</label>
+      <div class="upload-box" id="dropO">Arraste aqui ou clique para selecionar</div>
+      <input type="file" id="arquivoO" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+      <textarea id="textoOrcado" placeholder="Orçado: cole os dados aqui" style="min-height:60px"></textarea>
+      <label>Realizado (planilha ou texto)</label>
+      <div class="upload-box" id="dropR">Arraste aqui ou clique para selecionar</div>
+      <input type="file" id="arquivoR" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+      <textarea id="textoRealizado" placeholder="Realizado: cole os dados aqui" style="min-height:60px"></textarea>
+      <div class="btn-row"><button class="btn" id="btnOrcado">⚖️ Comparar orçado × realizado</button></div>
+      <div class="status hidden" id="statusOrcado"></div>
     </div>
   </div>
 
   <div class="card hidden" id="cardHistorico">
     <h2>🕘 Análises salvas</h2>
     <div id="listaHistorico"></div>
-    <div class="nota-ia">Salvas localmente no seu navegador — clique para reabrir sem subir o arquivo de novo.</div>
+    <div class="nota-ia">Salvas no servidor (por usuário). Clique para reabrir.</div>
   </div>
 
   <div id="resultado" class="hidden"></div>
@@ -173,8 +200,146 @@ let historicoSalvo = JSON.parse(localStorage.getItem('cfo_historico') || '[]');
 function mostrarModo(m) {
   document.getElementById('modoSimples').classList.toggle('hidden', m !== 'simples');
   document.getElementById('modoComparar').classList.toggle('hidden', m !== 'comparar');
+  document.getElementById('modoOrcado').classList.toggle('hidden', m !== 'orcado');
   document.getElementById('btnModoSimples').style.opacity = m === 'simples' ? 1 : .5;
   document.getElementById('btnModoComparar').style.opacity = m === 'comparar' ? 1 : .5;
+  document.getElementById('btnModoOrcado').style.opacity = m === 'orcado' ? 1 : .5;
+}
+
+// ---------- autenticação ----------
+async function initAuth() {
+  try {
+    const resp = await fetch('/auth/status');
+    const a = await resp.json();
+    if (!a.ativo) { return; }
+    document.getElementById('cardLogin').classList.remove('hidden');
+    if (a.logado) { document.getElementById('cardLogin').classList.add('hidden'); }
+  } catch (e) {}
+}
+async function login() {
+  const user = document.getElementById('loginUser').value.trim();
+  const senha = document.getElementById('loginSenha').value;
+  const s = document.getElementById('loginStatus');
+  try {
+    const resp = await fetch('/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario: user, senha }),
+    });
+    const d = await resp.json();
+    if (!resp.ok) { s.textContent = d.erro || 'Falha no login.'; s.classList.remove('hidden'); s.classList.add('erro'); return; }
+    document.getElementById('cardLogin').classList.add('hidden');
+    document.getElementById('usuarioInfo').textContent = '👤 ' + user;
+    document.getElementById('usuarioInfo').classList.remove('hidden');
+    document.getElementById('btnLogout').classList.remove('hidden');
+    carregarHistoricoServidor();
+  } catch (e) { s.textContent = 'Erro: ' + e.message; s.classList.remove('hidden'); s.classList.add('erro'); }
+}
+async function logout() {
+  await fetch('/auth/logout', { method: 'POST' });
+  location.reload();
+}
+
+// ---------- histórico do servidor ----------
+async function carregarHistoricoServidor() {
+  try {
+    const resp = await fetch('/historico');
+    const d = await resp.json();
+    if (resp.ok && d.itens) { renderHistoricoServidor(d.itens); }
+  } catch (e) {}
+}
+function renderHistoricoServidor(itens) {
+  const card = document.getElementById('cardHistorico');
+  const box = document.getElementById('listaHistorico');
+  if (!itens.length) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  box.innerHTML = '';
+  for (const h of itens) {
+    const el = document.createElement('div');
+    el.className = 'hist-item';
+    el.innerHTML = `<span>📄 ${esc(h.nome)} <small style="color:var(--muted)">(${esc(h.tipo)} · ${esc(h.data)})</small></span>
+      <button class="lixo" onclick="removerHistoricoServidor(${h.id}, event)">🗑</button>`;
+    el.onclick = () => abrirHistoricoServidor(h.id);
+    box.appendChild(el);
+  }
+}
+async function abrirHistoricoServidor(id) {
+  try {
+    const resp = await fetch('/historico/' + id);
+    const d = await resp.json();
+    if (!resp.ok) return;
+    ultimoResultado = d.resultado;
+    ultimosGraficos = null;
+    render(ultimoResultado, {});
+    resultado.classList.remove('hidden');
+    resultado.scrollIntoView();
+    chatAdd('ia', `📂 Reabri análise do servidor. Pergunte o que quiser!`);
+  } catch (e) {}
+}
+async function removerHistoricoServidor(id, ev) {
+  ev.stopPropagation();
+  await fetch('/historico/' + id, { method: 'DELETE' });
+  carregarHistoricoServidor();
+}
+
+// ---------- orçado x realizado ----------
+function configDropOrcado() {
+  const o = document.getElementById('dropO'), r = document.getElementById('dropR');
+  o.onclick = () => document.getElementById('arquivoO').click();
+  r.onclick = () => document.getElementById('arquivoR').click();
+  document.getElementById('arquivoO').addEventListener('change', e => { if (e.target.files[0]) o.innerHTML = '📄 ' + e.target.files[0].name; });
+  document.getElementById('arquivoR').addEventListener('change', e => { if (e.target.files[0]) r.innerHTML = '📄 ' + e.target.files[0].name; });
+}
+async function analisarOrcadoRealizado() {
+  const s = document.getElementById('statusOrcado');
+  const fO = document.getElementById('arquivoO').files[0];
+  const fR = document.getElementById('arquivoR').files[0];
+  const tO = document.getElementById('textoOrcado').value.trim();
+  const tR = document.getElementById('textoRealizado').value.trim();
+  if (!fO && !tO) { s.textContent = 'Envie o orçado.'; s.classList.remove('hidden'); s.classList.add('erro'); return; }
+  if (!fR && !tR) { s.textContent = 'Envie o realizado.'; s.classList.remove('hidden'); s.classList.add('erro'); return; }
+  s.textContent = 'Comparando orçado × realizado...'; s.classList.remove('hidden'); s.classList.remove('erro');
+  try {
+    const aO = await analisarParaDados(fO, tO);
+    const aR = await analisarParaDados(fR, tR);
+    const resp = await fetch('/orcado-realizado', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orcado: aO, realizado: aR }),
+    });
+    const d = await resp.json();
+    s.classList.add('hidden');
+    if (!resp.ok) { chatAdd('ia', 'Erro: ' + (d.erro || '')); return; }
+    chatAdd('ia', '⚖️ **Orçado × Realizado**\n\n' + d.resposta);
+  } catch (e) { s.textContent = 'Erro: ' + e.message; s.classList.add('erro'); }
+}
+async function analisarParaDados(arquivo, texto) {
+  const fd = new FormData();
+  if (arquivo) fd.append('arquivo', arquivo);
+  if (texto) fd.append('texto', texto);
+  const resp = await fetch('/analisar', { method: 'POST', body: fd });
+  const d = await resp.json();
+  if (!resp.ok) throw new Error(d.erro || 'Falha na análise');
+  return { total_saidas: d.resultado.total_saidas, gastos_categorias: d.resultado.gastos_categorias };
+}
+
+// ---------- alerta de saúde do caixa ----------
+async function verAlertaCaixa() {
+  if (!ultimoResultado) return;
+  chatAdd('ia', 'Analisando a saúde do caixa...');
+  try {
+    const resp = await fetch('/alerta-caixa', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resultado: ultimoResultado }),
+    });
+    const d = await resp.json();
+    const box = document.getElementById('chatMsg');
+    if (box) box.lastChild.remove();
+    const icone = d.nivel === 'vermelho' ? '🔴' : d.nivel === 'amarelo' ? '🟡' : '🟢';
+    chatAdd('ia', `${icone} **Saúde do caixa (${d.nivel})**\n${d.mensagem}`);
+  } catch (e) {
+    const box = document.getElementById('chatMsg');
+    if (box) box.lastChild.remove();
+    chatAdd('ia', 'Erro: ' + e.message);
+  }
 }
 
 // ---------- tema ----------
@@ -578,7 +743,10 @@ function esc(s) {
 }
 
 renderHistorico();
-chatAdd('ia', '👋 Olá! Sou o CFO de Bolso. Suba sua planilha (ou cole os dados), clique em Analisar, e me pergunte o que quiser. Posso comparar planilhas e prever os próximos 3 meses!');
+initAuth();
+configDropOrcado();
+document.getElementById('btnOrcado').addEventListener('click', analisarOrcadoRealizado);
+chatAdd('ia', '👋 Olá! Sou o CFO de Bolso. Suba sua planilha (ou cole os dados), clique em Analisar, e me pergunte o que quiser. Posso comparar planilhas, comparar orçado × realizado e prever os próximos 3 meses!');
 </script>
 </body>
 </html>
