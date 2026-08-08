@@ -146,7 +146,7 @@ def _processar_planilha_completa(arquivo_bytes, nome_arquivo, intencao=""):
         "graf": {},
         "planilha_info": {
             "n_abas": info["n_abas"],
-            "abas": [a["nome"] for a in info["abas"]],
+            "abas": info["abas"],  # dicts completos (nome, cabecalhos, amostra)
             "estrutura": estrutura,
         },
     }
@@ -176,6 +176,7 @@ def analisar():
             return jsonify({"erro": "Envie um arquivo ou cole os dados em texto."}), 400
 
         df, resultado = _processar_dados(arquivo_bytes, nome_arquivo, texto, intencao)
+        resultado.setdefault("nome_arquivo", nome_arquivo or "texto-colado.txt")
         # remove gráficos pesados do JSON (são montados no HTML)
         graf = resultado.pop("graf", {})
         return jsonify({"resultado": resultado, "graficos": graf})
@@ -254,6 +255,37 @@ def perguntar():
         return jsonify({"resposta": resposta})
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/relatorio/planilha/<formato>", methods=["POST"])
+def relatorio_planilha(formato):
+    """Downloads para planilhas completas (multi-abas). Formatos: pptx, word, pdf, xlsx."""
+    data = request.get_json(force=True)
+    resultado = data.get("resultado", {})
+    info = data.get("planilha_info") or resultado.get("planilha_info", {})
+    nome_base = str(resultado.get("nome_arquivo", "planilha")).rsplit(".", 1)[0][:50] or "planilha"
+    try:
+        if formato == "pptx":
+            buf = relatorio.gerar_pptx_planilha(resultado, info)
+            return send_file(buf,
+                             mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                             as_attachment=True, download_name=f"{nome_base}-apresentacao.pptx")
+        if formato == "word":
+            buf = relatorio.gerar_word_planilha(resultado, info)
+            return send_file(buf, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                             as_attachment=True, download_name=f"{nome_base}-relatorio.docx")
+        if formato == "pdf":
+            buf = relatorio.gerar_pdf_planilha(resultado, info)
+            return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=f"{nome_base}-relatorio.pdf")
+        if formato == "xlsx":
+            buf = relatorio.gerar_xlsx_processado(resultado, info)
+            return send_file(buf,
+                             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             as_attachment=True, download_name=f"{nome_base}-processada.xlsx")
+        return jsonify({"erro": "Formato não suportado."}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"erro": f"Erro ao gerar: {e}"}), 500
 
 
 if __name__ == "__main__":

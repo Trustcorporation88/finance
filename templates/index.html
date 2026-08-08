@@ -243,11 +243,21 @@ function render(r, g) {
     html += '<div class="nota-ia">ℹ️ A análise por IA está desativada porque não configurei a chave DEEPSEEK_API_KEY. Os números automáticos acima continuam válidos.</div>';
   }
 
-  html += '<div class="btn-row" style="margin-top:18px">';
-  html += '<button class="btn verde" onclick="baixar(\'word\')">📄 Baixar Word</button>';
-  html += '<button class="btn vermelho" onclick="baixar(\'pdf\')">📕 Baixar PDF</button>';
-  html += '<button class="btn" onclick="baixar(\'pptx\')">📊 Baixar PPTX</button>';
-  html += '</div></div>';
+  if (r.tipo_analise === 'planilha_completa') {
+    html += '<h4 style="color:var(--azul); font-size:14px; margin:16px 0 8px;">📦 Baixar análise da planilha completa</h4>';
+    html += '<div class="btn-row">';
+    html += '<button class="btn verde" onclick="baixarPlanilha(\'pptx\')">📊 Apresentação PPTX</button>';
+    html += '<button class="btn verde" onclick="baixarPlanilha(\'word\')">📄 Relatório Word</button>';
+    html += '<button class="btn vermelho" onclick="baixarPlanilha(\'pdf\')">📕 Relatório PDF</button>';
+    html += '<button class="btn" onclick="baixarPlanilha(\'xlsx\')">📗 Planilha processada</button>';
+    html += '</div></div>';
+  } else {
+    html += '<div class="btn-row" style="margin-top:18px">';
+    html += '<button class="btn verde" onclick="baixar(\'word\')">📄 Baixar Word</button>';
+    html += '<button class="btn vermelho" onclick="baixar(\'pdf\')">📕 Baixar PDF</button>';
+    html += '<button class="btn" onclick="baixar(\'pptx\')">📊 Baixar PPTX</button>';
+    html += '</div></div>';
+  }
 
   resultado.innerHTML = html;
   resultado.classList.remove('hidden');
@@ -285,6 +295,27 @@ async function baixar(formato) {
   const a = document.createElement('a');
   a.href = url;
   a.download = 'raio-x-do-caixa.' + formato;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function baixarPlanilha(formato) {
+  if (!ultimoResultado) return;
+  const resp = await fetch('/relatorio/planilha/' + formato, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      resultado: ultimoResultado,
+      planilha_info: ultimoResultado.planilha_info || {},
+    }),
+  });
+  if (!resp.ok) { alert('Erro ao gerar ' + formato.toUpperCase()); return; }
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const ext = formato === 'pptx' ? 'pptx' : formato === 'word' ? 'docx' : formato;
+  a.download = 'analise-planilha.' + ext;
   a.click();
   URL.revokeObjectURL(url);
 }

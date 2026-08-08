@@ -406,3 +406,269 @@ def gerar_pptx(resultado: dict, graf: dict) -> io.BytesIO:
     prs.save(buf)
     buf.seek(0)
     return buf
+
+
+# ==========================================================================
+# PLANILHA COMPLETA: geração de apresentação, relatório e exportação
+# ==========================================================================
+
+def _abas_para_linhas(info):
+    """Converte abas da planilha em linhas de tabela para relatórios.
+    Aceita abas como dicts (nome, cabecalhos, amostra) ou como strings (só nome)."""
+    linhas = []
+    for a in info.get("abas", []):
+        if isinstance(a, dict):
+            nome = a.get("nome", "")
+            nlin = a.get("linhas_lidas", 0)
+            ncol = a.get("colunas_max", 0)
+            cab = "; ".join(" | ".join(str(x) for x in c) for c in a.get("cabecalhos", [])[:2])
+        else:
+            nome = str(a)
+            nlin = ncol = 0
+            cab = ""
+        linhas.append([nome, f"{nlin} linhas", f"{ncol} col", cab[:80]])
+    return linhas
+
+
+def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
+    """Gera uma apresentação resumindo todas as abas de uma planilha completa."""
+    if not PPTX_DISPONIVEL:
+        raise RuntimeError("python-pptx não instalado no servidor.")
+    info = info or resultado.get("planilha_info", {})
+    abas = info.get("abas", [])
+
+    prs = PptxPresentation()
+    prs.slide_width = PptxInches(13.333)
+    prs.slide_height = PptxInches(7.5)
+    blank = prs.slide_layouts[6]
+
+    def novo_slide():
+        return prs.slides.add_slide(blank)
+
+    def caixa(slide, l, t, w, h, cor=None):
+        sh = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(h))
+        if cor is None:
+            sh.fill.background()
+        else:
+            sh.fill.solid()
+            sh.fill.fore_color.rgb = cor
+        sh.line.fill.background()
+        return sh
+
+    def texto(slide, l, t, w, h, conteudo, size=18, bold=False, cor=CINZA_P, align=PP_ALIGN.LEFT):
+        tb = slide.shapes.add_textbox(PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(h))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.alignment = align
+        r = p.add_run()
+        r.text = conteudo
+        r.font.size = PptxPt(size)
+        r.font.bold = bold
+        r.font.color.rgb = cor
+        return tb
+
+    def cabecalho(slide, titulo, sub=None):
+        caixa(slide, 0, 0, 13.333, 0.95, AZUL_P)
+        texto(slide, 0.4, 0.16, 12.5, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
+        if sub:
+            texto(slide, 0.4, 0.55, 12.5, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
+
+    def tabela(slide, l, t, w, rows, col_w=None, font_size=10, header_font=10):
+        nrows = len(rows)
+        ncols = len(rows[0])
+        shp = slide.shapes.add_table(nrows, ncols, PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(0.28 * nrows))
+        tbl = shp.table
+        if col_w:
+            for j, cw in enumerate(col_w):
+                tbl.columns[j].width = PptxInches(cw)
+        for i, row in enumerate(rows):
+            for j, val in enumerate(row):
+                cell = tbl.cell(i, j)
+                cell.text = str(val)
+                for p in cell.text_frame.paragraphs:
+                    for r in p.runs:
+                        r.font.size = PptxPt(header_font if i == 0 else font_size)
+                        r.font.bold = (i == 0)
+                        r.font.color.rgb = BRANCO_P if i == 0 else PptxRGBColor(0x22, 0x22, 0x22)
+                if i == 0:
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = AZUL_P
+        return tbl
+
+    # Slide 1: capa
+    s = novo_slide()
+    caixa(s, 0, 0, 13.333, 7.5, AZUL_P)
+    caixa(s, 0, 4.5, 13.333, 0.06, AMARELO_P)
+    texto(s, 1.0, 2.3, 11.3, 1.0, "ANÁLISE DA PLANILHA", size=42, bold=True, cor=BRANCO_P)
+    nome_arq = resultado.get("nome_arquivo", "planilha")
+    texto(s, 1.0, 3.3, 11.3, 0.7, str(nome_arq), size=20, cor=PptxRGBColor(0xDD, 0xFF, 0xDD))
+    texto(s, 1.0, 4.0, 11.3, 0.6, f"{info.get('n_abas', 0)} abas analisadas", size=16, cor=PptxRGBColor(0xCC, 0xFF, 0xCC))
+
+    # Slide 2: visão geral das abas
+    s = novo_slide()
+    cabecalho(s, "Visão geral das abas")
+    linhas_tab = [["Aba", "Linhas", "Colunas", "Conteúdo"]] + _abas_para_linhas(info)
+    tabela(s, 0.4, 1.3, 12.5, linhas_tab, col_w=[3.2, 1.3, 1.2, 4.8], font_size=10, header_font=10)
+
+    # Slides por aba (até 8 abas mais importantes para não estourar)
+    slides_aba = abas[:8]
+    for idx, a in enumerate(slides_aba):
+        s = novo_slide()
+        cabecalho(s, f"Aba: {a.get('nome','')}")
+        cab = a.get("cabecalhos", [])
+        amostra = a.get("amostra", [])
+        y = 1.3
+        if cab:
+            texto(s, 0.4, y, 12.5, 0.4, "Conteúdo/cabeçalhos:", size=13, bold=True, cor=VERDE_P)
+            y += 0.35
+            for c in cab[:4]:
+                texto(s, 0.6, y, 12.4, 0.35, "  " + " | ".join(str(x) for x in c)[:140], size=11, cor=CINZA_P)
+                y += 0.32
+        if amostra:
+            texto(s, 0.4, y, 12.5, 0.4, "Dados:", size=13, bold=True, cor=VERDE_P)
+            y += 0.35
+            for c in amostra[:6]:
+                texto(s, 0.6, y, 12.4, 0.32, "  " + " | ".join(str(x) for x in c)[:140], size=10, cor=CINZA_P)
+                y += 0.30
+
+    # Slide final: análise da IA
+    if resultado.get("narrativa_ia"):
+        s = novo_slide()
+        cabecalho(s, "Análise da IA")
+        texto(s, 0.6, 1.3, 12.2, 5.8, resultado["narrativa_ia"], size=14)
+
+    buf = io.BytesIO()
+    prs.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def gerar_word_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
+    """Gera um relatório Word resumindo a planilha completa."""
+    info = info or resultado.get("planilha_info", {})
+    doc = Document()
+    estilo = doc.styles["Normal"]
+    estilo.font.name = "Calibri"
+    estilo.font.size = Pt(11)
+
+    doc.add_heading("Análise da Planilha", level=0)
+    nome = resultado.get("nome_arquivo", "planilha")
+    p = doc.add_paragraph()
+    r = p.add_run(f"Arquivo: {nome} · {info.get('n_abas', 0)} abas")
+    r.italic = True
+    r.font.size = Pt(9)
+    r.font.color.rgb = CINZA
+
+    # Tabela de abas
+    doc.add_heading("Abas da planilha", level=1)
+    linhas = [["Aba", "Linhas", "Colunas", "Conteúdo"]] + _abas_para_linhas(info)
+    t = doc.add_table(rows=len(linhas), cols=4)
+    t.style = "Light Grid Accent 1"
+    for i, row in enumerate(linhas):
+        for j, val in enumerate(row):
+            t.cell(i, j).text = str(val)
+    for i, row in enumerate(t.rows):
+        for cell in row.cells:
+            for pr in cell.paragraphs:
+                for rr in pr.runs:
+                    rr.font.size = Pt(9)
+                    if i == 0:
+                        rr.bold = True
+
+    # Detalhe de cada aba
+    for a in info.get("abas", []):
+        doc.add_heading(f"Aba: {a.get('nome','')}", level=2)
+        for c in a.get("cabecalhos", [])[:5]:
+            doc.add_paragraph(" | ".join(str(x) for x in c))
+        for c in a.get("amostra", [])[:8]:
+            doc.add_paragraph("   " + " | ".join(str(x) for x in c))
+
+    if resultado.get("narrativa_ia"):
+        doc.add_heading("Análise da IA", level=1)
+        doc.add_paragraph(resultado["narrativa_ia"])
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def gerar_pdf_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
+    """Gera um PDF resumindo a planilha completa."""
+    info = info or resultado.get("planilha_info", {})
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=15 * mm, rightMargin=15 * mm,
+                            topMargin=15 * mm, bottomMargin=15 * mm)
+    estilos = getSampleStyleSheet()
+    titulo = ParagraphStyle("Titulo", parent=estilos["Title"], fontSize=18, textColor=HexColor("#1F3B73"))
+    h2 = ParagraphStyle("H2", parent=estilos["Heading2"], fontSize=13, textColor=HexColor("#1F3B73"), spaceBefore=10)
+    corpo = ParagraphStyle("Corpo", parent=estilos["BodyText"], fontSize=9, leading=12)
+    nota = ParagraphStyle("Nota", parent=estilos["BodyText"], fontSize=8, textColor=HexColor("#555555"), italic=True)
+
+    elementos = []
+    elementos.append(Paragraph("Análise da Planilha", titulo))
+    elementos.append(Paragraph(f"{resultado.get('nome_arquivo','planilha')} · {info.get('n_abas',0)} abas", nota))
+    elementos.append(Spacer(1, 8))
+
+    elementos.append(Paragraph("Abas da planilha", h2))
+    linhas_tab = [["Aba", "Linhas", "Colunas"]] + [
+        [a.get("nome",""), str(a.get("linhas_lidas",0)), str(a.get("colunas_max",0))] for a in info.get("abas", [])
+    ]
+    tbl = Table(linhas_tab, colWidths=[80*mm, 35*mm, 35*mm])
+    tbl.setStyle(TableStyle([
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
+        ("GRID", (0,0), (-1,-1), 0.4, HexColor("#CCCCCC")),
+        ("BACKGROUND", (0,0), (-1,0), HexColor("#1F3B73")),
+        ("TEXTCOLOR", (0,0), (-1,0), HexColor("#FFFFFF")),
+    ]))
+    elementos.append(tbl)
+    elementos.append(Spacer(1, 8))
+
+    for a in info.get("abas", []):
+        elementos.append(Paragraph(f"Aba: {a.get('nome','')}", h2))
+        for c in a.get("amostra", [])[:6]:
+            elementos.append(Paragraph(" | ".join(str(x) for x in c)[:120], corpo))
+
+    if resultado.get("narrativa_ia"):
+        elementos.append(Paragraph("Análise da IA", h2))
+        for bloco in resultado["narrativa_ia"].split("\n\n"):
+            elementos.append(Paragraph(bloco.replace("\n", "<br/>"), corpo))
+
+    doc.build(elementos)
+    buf.seek(0)
+    return buf
+
+
+def gerar_xlsx_processado(resultado: dict, info: dict = None) -> io.BytesIO:
+    """Gera um XLSX com o resumo estruturado da planilha (abas, conteúdo)."""
+    import openpyxl as _ox
+
+    info = info or resultado.get("planilha_info", {})
+    wb = _ox.Workbook()
+    ws = wb.active
+    ws.title = "Resumo"
+    ws.append(["Aba", "Linhas", "Colunas"])
+    for a in info.get("abas", []):
+        ws.append([a.get("nome",""), a.get("linhas_lidas",0), a.get("colunas_max",0)])
+
+    # aba por aba com amostra
+    for a in info.get("abas", []):
+        nome_aba = str(a.get("nome",""))[:28] or "Aba"
+        ws_aba = wb.create_sheet(title=nome_aba)
+        for c in a.get("cabecalhos", []):
+            ws_aba.append([str(x) for x in c])
+        for c in a.get("amostra", []):
+            ws_aba.append([str(x) for x in c])
+
+    if resultado.get("narrativa_ia"):
+        ws_ia = wb.create_sheet(title="Analise IA")
+        for linha in resultado["narrativa_ia"].split("\n"):
+            ws_ia.append([linha])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
