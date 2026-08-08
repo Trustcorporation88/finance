@@ -24,6 +24,7 @@ import analise
 import graficos
 import deepseek_client
 import relatorio
+import supabase_client
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB
@@ -72,17 +73,32 @@ def _exigir_auth():
     return None
 
 
-# ---------- histórico por usuário (em memória, com limite) ----------
-HISTORICOS = collections.defaultdict(list)   # usuario -> lista de análises
+# ---------- histórico por usuário (Supabase se ativo; senão memória) ----------
+HISTORICOS = collections.defaultdict(list)   # fallback em memória
 
 
 def _salvar_historico(usuario, item):
+    # tenta Supabase primeiro
+    if supabase_client.ativo():
+        ok = supabase_client.salvar_analise(usuario, item.get("nome", "análise"),
+                                            item.get("tipo", "extrato"), item.get("resultado", {}))
+        if ok:
+            return
+    # fallback em memória
     HISTORICOS[usuario].insert(0, item)
     if len(HISTORICOS[usuario]) > 30:
         HISTORICOS[usuario] = HISTORICOS[usuario][:30]
 
 
 def _listar_historico(usuario):
+    if supabase_client.ativo():
+        itens = supabase_client.listar_analises(usuario)
+        return [{
+            "id": i.get("id"),
+            "nome": i.get("nome", "análise"),
+            "tipo": i.get("tipo", "extrato"),
+            "data": (i.get("criado_em") or "")[:16].replace("T", " "),
+        } for i in itens]
     return HISTORICOS.get(usuario, [])
 
 
@@ -499,7 +515,11 @@ def relatorio_planilha(formato):
 # ---------- autenticação ----------
 @app.route("/auth/status", methods=["GET"])
 def auth_status():
-    return jsonify({"ativo": AUTH_ATIVO, "logado": bool(_usuario_atual())})
+    return jsonify({
+        "ativo": AUTH_ATIVO,
+        "supabase": supabase_client.ativo(),
+        "logado": bool(_usuario_atual()),
+    })
 
 
 @app.route("/auth/login", methods=["POST"])
@@ -507,6 +527,14 @@ def auth_login():
     data = request.get_json(force=True)
     user = (data.get("usuario") or "").strip()
     senha = (data.get("senha") or "").strip()
+    # Supabase Auth tem prioridade se ativo
+    if supabase_client.ativo():
+        r = supabase_client.sign_in(user, senha)
+        if r.get("ok"):
+            session["usuario"] = user
+            session["supabase_token"] = r.get("access_token", "")
+            return jsonify({"ok": True, "logado": True, "usuario": user, "provedor": "supabase"})
+        return jsonify({"ok": False, "erro": r.get("erro", "E-mail ou senha inválidos.")}), 401
     if not AUTH_ATIVO:
         return jsonify({"ok": True, "logado": True})
     # comparação segura (constant-time)
@@ -518,9 +546,43 @@ def auth_login():
     return jsonify({"ok": False, "erro": "Usuário ou senha inválidos."}), 401
 
 
+@app.route("/auth/signup", methods=["POST"])
+def auth_signup():
+    data = request.get_json(force=True)
+    email = (data.get("email") or "").strip()
+    senha = (data.get("senha") or "").strip()
+    if not supabase_client.ativo():
+        return jsonify({"ok": False, "erro": "Cadastro desativado (Supabase não configurado)."}), 400
+    if not email or len(senha) < 6:
+        return jsonify({"ok": False, "erro": "Informe e-mail e senha com pelo menos 6 caracteres."}), 400
+    r = supabase_client.sign_up(email, senha)
+    if not r.get("ok"):
+        return jsonify({"ok": False, "erro": r.get("erro", "Falha no cadastro.")}), 400
+    session["usuario"] = email
+    return jsonify({"ok": True, "logado": True, "usuario": email})
+
+
+@app.route("/auth/magic", methods=["POST"])
+def auth_magic():
+    data = request.get_json(force=True)
+    email = (data.get("email") or "").strip()
+    if not supabase_client.ativo():
+        return jsonify({"ok": False, "erro": "Acesso por link desativado (Supabase não configurado)."}), 400
+    r = supabase_client.sign_in_magic(email)
+    if r.get("ok"):
+        return jsonify({"ok": True, "mensagem": r.get("mensagem", "Link enviado.")})
+    return jsonify({"ok": False, "erro": r.get("erro", "Falha ao enviar link.")}), 400
+
+
 @app.route("/auth/logout", methods=["POST"])
 def auth_logout():
     session.pop("usuario", None)
+    session.pop("supabase_token", None)
+    if supabase_client.ativo():
+        try:
+            supabase_client._get_client().auth.sign_out()
+        except Exception:
+            pass
     return jsonify({"ok": True})
 
 
@@ -530,6 +592,9 @@ def historico():
     if bloqueio:
         return bloqueio
     itens = _listar_historico(_usuario_atual())
+    if supabase_client.ativo():
+        # itens já vêm no formato resumido
+        return jsonify({"itens": itens})
     resumo = [{
         "id": i["id"], "nome": i["nome"], "tipo": i["tipo"], "data": i["data"],
     } for i in itens]
@@ -541,7 +606,13 @@ def historico_item(hid):
     bloqueio = _exigir_auth()
     if bloqueio:
         return bloqueio
-    for i in _listar_historico(_usuario_atual()):
+    usuario = _usuario_atual()
+    if supabase_client.ativo():
+        item = supabase_client.buscar_analise(usuario, hid)
+        if item:
+            return jsonify({"resultado": item.get("resultado", {})})
+        return jsonify({"erro": "Análise não encontrada."}), 404
+    for i in HISTORICOS.get(usuario, []):
         if i["id"] == hid:
             return jsonify({"resultado": i["resultado"]})
     return jsonify({"erro": "Análise não encontrada."}), 404
@@ -552,18 +623,28 @@ def historico_delete(hid):
     bloqueio = _exigir_auth()
     if bloqueio:
         return bloqueio
-    hist = HISTORICOS.get(_usuario_atual(), [])
-    HISTORICOS[_usuario_atual()] = [i for i in hist if i["id"] != hid]
+    usuario = _usuario_atual()
+    if supabase_client.ativo():
+        supabase_client.deletar_analise(usuario, hid)
+        return jsonify({"ok": True})
+    HISTORICOS[usuario] = [i for i in HISTORICOS.get(usuario, []) if i["id"] != hid]
     return jsonify({"ok": True})
 
 
-# ---------- logs de uso (simples, em memória) ----------
+# ---------- logs de uso (Supabase se ativo; senão em memória) ----------
 USO = collections.Counter()          # contagem por tipo de ação
 USO_IP = collections.Counter()       # contagem por IP
 USO_DETALHES = []                     # últimas ações
 
 
 def _registrar_uso(acao, ip=""):
+    # Supabase primeiro
+    if supabase_client.ativo():
+        try:
+            supabase_client.registrar_log(acao, ip)
+        except Exception:
+            pass
+        return
     USO[acao] += 1
     if ip:
         USO_IP[ip] += 1
@@ -584,6 +665,14 @@ def _log_uso_geral(resp):
 @app.route("/api/uso", methods=["GET"])
 def api_uso():
     """Painel simples de uso (contagem de acessos/ações)."""
+    if supabase_client.ativo():
+        dados = supabase_client.resumo_logs()
+        return jsonify({
+            "supabase": True,
+            "top_rotas": [{"rota": r, "count": c} for r, c in dados.get("top_acoes", [])],
+            "top_ips": [{"ip": ip, "count": c} for ip, c in dados.get("top_ips", [])],
+            "recentes": dados.get("recentes", []),
+        })
     total = sum(USO.values())
     top_rotas = USO.most_common(15)
     top_ips = USO_IP.most_common(10)
@@ -596,5 +685,12 @@ def api_uso():
 
 
 if __name__ == "__main__":
+    # inicializa Supabase (cria tabelas e bucket) se configurado
+    try:
+        if supabase_client.ativo():
+            supabase_client.garantir_bucket()
+            supabase_client.inicializar_schema()
+    except Exception:
+        pass
     porta = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=porta, debug=False)

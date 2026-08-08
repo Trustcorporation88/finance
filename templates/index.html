@@ -99,11 +99,19 @@
 <main>
   <div class="card hidden" id="cardLogin">
     <h2>🔐 Acesso</h2>
-    <label>Usuário</label>
+    <label>Usuário / E-mail</label>
     <input id="loginUser" type="text" style="width:100%; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px; background:var(--surface); color:var(--texto);">
     <label>Senha</label>
     <input id="loginSenha" type="password" style="width:100%; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px; background:var(--surface); color:var(--texto);">
     <div class="btn-row"><button class="btn" onclick="login()">Entrar</button></div>
+    <div id="signupArea" class="hidden" style="margin-top:10px; border-top:1px solid var(--borda); padding-top:10px;">
+      <label>Novo usuário? Crie sua conta</label>
+      <div class="btn-row"><button class="btn verde" onclick="signup()">📝 Criar conta</button></div>
+    </div>
+    <div id="magicArea" class="hidden" style="margin-top:10px; border-top:1px solid var(--borda); padding-top:10px;">
+      <label>Ou entre por link mágico (sem senha)</label>
+      <div class="btn-row"><button class="btn cinza" onclick="magicLink()">🔗 Enviar link</button></div>
+    </div>
     <div class="status hidden" id="loginStatus"></div>
   </div>
 
@@ -211,9 +219,17 @@ async function initAuth() {
   try {
     const resp = await fetch('/auth/status');
     const a = await resp.json();
-    if (!a.ativo) { return; }
-    document.getElementById('cardLogin').classList.remove('hidden');
-    if (a.logado) { document.getElementById('cardLogin').classList.add('hidden'); }
+    window.supabaseAtivo = !!a.supabase;
+    const loginCard = document.getElementById('cardLogin');
+    // se supabase ativo, mostra cadastro + magic link
+    if (a.supabase) {
+      document.getElementById('signupArea').classList.remove('hidden');
+      document.getElementById('magicArea').classList.remove('hidden');
+      document.getElementById('loginUser').placeholder = 'Seu e-mail';
+    }
+    if (!a.ativo && !a.supabase) { return; }
+    loginCard.classList.remove('hidden');
+    if (a.logado) { loginCard.classList.add('hidden'); document.getElementById('usuarioInfo').textContent = '👤 logado'; document.getElementById('usuarioInfo').classList.remove('hidden'); document.getElementById('btnLogout').classList.remove('hidden'); }
   } catch (e) {}
 }
 async function login() {
@@ -234,6 +250,41 @@ async function login() {
     carregarHistoricoServidor();
   } catch (e) { s.textContent = 'Erro: ' + e.message; s.classList.remove('hidden'); s.classList.add('erro'); }
 }
+async function signup() {
+  const email = document.getElementById('loginUser').value.trim();
+  const senha = document.getElementById('loginSenha').value;
+  const s = document.getElementById('loginStatus');
+  try {
+    const resp = await fetch('/auth/signup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha }),
+    });
+    const d = await resp.json();
+    if (!resp.ok) { s.textContent = d.erro || 'Falha no cadastro.'; s.classList.remove('hidden'); s.classList.add('erro'); return; }
+    document.getElementById('cardLogin').classList.add('hidden');
+    document.getElementById('usuarioInfo').textContent = '👤 ' + email;
+    document.getElementById('usuarioInfo').classList.remove('hidden');
+    document.getElementById('btnLogout').classList.remove('hidden');
+    carregarHistoricoServidor();
+    s.classList.add('hidden');
+  } catch (e) { s.textContent = 'Erro: ' + e.message; s.classList.remove('hidden'); s.classList.add('erro'); }
+}
+async function magicLink() {
+  const email = document.getElementById('loginUser').value.trim();
+  const s = document.getElementById('loginStatus');
+  if (!email) { s.textContent = 'Digite seu e-mail primeiro.'; s.classList.remove('hidden'); s.classList.add('erro'); return; }
+  try {
+    const resp = await fetch('/auth/magic', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const d = await resp.json();
+    s.textContent = d.erro || d.mensagem || 'Link enviado.';
+    s.classList.remove('hidden');
+    s.classList.toggle('erro', !resp.ok);
+  } catch (e) { s.textContent = 'Erro: ' + e.message; s.classList.remove('hidden'); s.classList.add('erro'); }
+}
+
 async function logout() {
   await fetch('/auth/logout', { method: 'POST' });
   location.reload();
