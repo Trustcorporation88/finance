@@ -8,21 +8,28 @@
   :root {
     --azul: #1F3B73; --azul2: #2c53a0; --verde: #1E8E3E; --vermelho: #C0392B;
     --amarelo: #F39C12; --cinza: #555; --bg: #f4f6fa; --borda: #dde3ee;
+    --surface: #ffffff; --texto: #222; --muted: #666; --chat-bg: #f7f9fc; --card: #fff;
+  }
+  body.dark {
+    --azul: #4a7ddb; --azul2: #6b9bff; --verde: #2ecc71; --vermelho: #e74c3c;
+    --amarelo: #f5b301; --cinza: #bbb; --bg: #14161a; --borda: #2a2e35;
+    --surface: #1d2126; --texto: #e6e8ea; --muted: #9aa0a6; --chat-bg: #262b31; --card: #1d2126;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Calibri, sans-serif; background: var(--bg); color: #222; }
+  body { font-family: 'Segoe UI', Calibri, sans-serif; background: var(--bg); color: var(--texto); transition: background .3s; }
   header { background: var(--azul); color: #fff; padding: 14px 28px; display: flex; align-items: center; gap: 18px; }
   header .logo { height: 52px; display: flex; align-items: center; }
   header .logo img { height: 48px; width: auto; }
   header h1 { font-size: 22px; }
   header p { font-size: 13px; opacity: .85; margin-top: 4px; }
   main { max-width: 1000px; margin: 24px auto; padding: 0 20px; }
-  .card { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 22px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--borda); border-radius: 10px; padding: 22px; margin-bottom: 20px; }
   .card h2 { font-size: 16px; color: var(--azul); margin-bottom: 12px; }
   label { font-size: 13px; font-weight: 600; display: block; margin: 10px 0 6px; }
-  .upload-box { border: 2px dashed var(--borda); border-radius: 8px; padding: 22px; text-align: center; color: #666; transition: .2s; cursor: pointer; }
+  .upload-box { border: 2px dashed var(--borda); border-radius: 8px; padding: 22px; text-align: center; color: var(--muted); transition: .2s; cursor: pointer; }
   .upload-box.drag { border-color: var(--azul2); background: #eef3fb; }
-  textarea { width: 100%; min-height: 120px; border: 1px solid var(--borda); border-radius: 8px; padding: 10px; font-size: 13px; font-family: Consolas, monospace; resize: vertical; }
+  body.dark .upload-box.drag { background: #233; }
+  textarea { width: 100%; min-height: 120px; border: 1px solid var(--borda); border-radius: 8px; padding: 10px; font-size: 13px; font-family: Consolas, monospace; resize: vertical; background: var(--surface); color: var(--texto); }
   .btn { background: var(--azul); color: #fff; border: 0; padding: 12px 22px; font-size: 15px; font-weight: 600; border-radius: 8px; cursor: pointer; margin-top: 14px; }
   .btn:hover { background: var(--azul2); }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -34,59 +41,113 @@
   .status { font-size: 13px; color: var(--cinza); margin-top: 10px; }
   .status.erro { color: var(--vermelho); font-weight: 600; }
   #resultado { margin-top: 24px; }
-  .raiox { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 22px; margin-bottom: 16px; }
+  .raiox { background: var(--card); border: 1px solid var(--borda); border-radius: 10px; padding: 22px; margin-bottom: 16px; }
   .raiox h3 { color: var(--azul); font-size: 18px; margin-bottom: 8px; }
   .raiox h4 { color: var(--verde); font-size: 14px; margin: 14px 0 6px; }
   .essencial { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 14px 0; }
-  .kpi { border: 1px solid var(--borda); border-radius: 8px; padding: 14px; text-align: center; }
+  .kpi { border: 1px solid var(--borda); border-radius: 8px; padding: 14px; text-align: center; background: var(--card); }
   .kpi .v { font-size: 20px; font-weight: 700; }
-  .kpi .r { font-size: 12px; color: #777; margin-top: 2px; }
+  .kpi .r { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .verde-c { color: var(--verde); } .vermelho-c { color: var(--vermelho); }
-  .graf { margin: 14px 0; text-align: center; }
+  .graf { margin: 14px 0; text-align: center; position: relative; }
   .graf img { max-width: 100%; border-radius: 8px; border: 1px solid var(--borda); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
   th { background: var(--azul); color: #fff; text-align: left; padding: 8px 10px; }
   td { padding: 7px 10px; border-bottom: 1px solid var(--borda); }
-  tr:nth-child(even) td { background: #f7f9fc; }
+  tr:nth-child(even) td { background: var(--chat-bg); }
   .alerta { border-left: 4px solid var(--amarelo); background: #fff8ec; padding: 10px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-size: 13px; }
   .alerta.alto { border-color: var(--vermelho); background: #fdeceb; }
   .ia { background: #f2f7f2; border: 1px solid #cfe3d3; border-radius: 8px; padding: 16px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  body.dark .ia { background: #1d2b1d; border-color: #2e4d2e; }
   .hidden { display: none; }
-  .nota-ia { font-size: 12px; color: var(--cinza); margin-top: 8px; }
+  .nota-ia { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .chatMsg { max-height: 240px; overflow-y: auto; margin-bottom: 10px; font-size: 13px; background: var(--chat-bg); border: 1px solid var(--borda); border-radius: 8px; padding: 8px; }
+  .chatMsg .msg { margin: 6px 0; padding: 8px 10px; border-radius: 8px; white-space: pre-wrap; }
+  .chatMsg .msg.voce { background: #eef4ee; text-align: right; }
+  .chatMsg .msg.ia { background: #fff; }
+  body.dark .chatMsg .msg.voce { background: #2a3a2a; }
+  body.dark .chatMsg .msg.ia { background: #262b31; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .tab { padding: 6px 12px; border: 1px solid var(--borda); border-radius: 20px; font-size: 12px; cursor: pointer; background: var(--card); color: var(--texto); }
+  .tab:hover { border-color: var(--azul2); }
+  .tab.sel { background: var(--azul); color: #fff; border-color: var(--azul); }
+  .topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .topbar .espaco { flex: 1; }
+  .theme-btn, .uso-btn { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3); color: #fff; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 12px; }
+  .theme-btn:hover, .uso-btn:hover { background: rgba(255,255,255,.25); }
+  .dl-graf { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; border: none; }
+  .hist-item { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--borda); border-radius: 8px; margin: 6px 0; cursor: pointer; font-size: 13px; }
+  .hist-item:hover { border-color: var(--azul2); }
+  .hist-item .lixo { margin-left: auto; color: var(--vermelho); cursor: pointer; border: none; background: none; font-size: 14px; }
 </style>
 </head>
 <body>
 <header>
   <div class="logo"><img src="/static/logo-trust.png" alt="Trust"></div>
-  <div>
+  <div style="flex:1">
     <h1>💼 CFO de Bolso</h1>
-    <p>Subiu sua planilha ou colou os números? Eu devolvo um raio-x do caixa: entrou, saiu, sobrou — e o que fazer. Análise por IA DeepSeek + cálculos automáticos.</p>
+    <p>Suba sua planilha ou cole os números e receba o raio-x do caixa — com IA, gráficos e downloads.</p>
+  </div>
+  <div class="topbar">
+    <button class="theme-btn" id="btnTema" onclick="alternarTema()">🌙 Escuro</button>
+    <button class="uso-btn" onclick="verUso()">📊 Uso</button>
   </div>
 </header>
 
 <main>
   <div class="card">
     <h2>💬 O que você quer fazer com sua planilha?</h2>
-    <p style="font-size:13px; color:#666; margin-bottom:10px;">Escreva aqui o que precisa — ex.: "quero saber se sobra dinheiro no fim do mês", "onde posso cortar gastos", "projeta os próximos 3 meses". Depois suba o arquivo e clique em Analisar.</p>
-    <div id="chatMsg" style="max-height:200px; overflow-y:auto; margin-bottom:10px; font-size:13px; background:#f7f9fc; border:1px solid var(--borda); border-radius:8px; padding:8px;"></div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Conversa com contexto — você pode perguntar antes e depois de analisar. A IA lembra do que conversou.</p>
+    <div id="chatMsg" class="chatMsg"></div>
     <div style="display:flex; gap:8px;">
-      <input id="chatInput" type="text" placeholder="Ex.: o que você quer que eu faça com a planilha?" style="flex:1; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px;">
+      <input id="chatInput" type="text" placeholder="Ex.: o que você quer que eu faça com a planilha?" style="flex:1; padding:10px; border:1px solid var(--borda); border-radius:8px; font-size:13px; background:var(--surface); color:var(--texto);">
       <button class="btn" onclick="perguntar()" style="margin-top:0; padding:10px 18px;">Enviar</button>
     </div>
-    <div class="nota-ia">Você pode conversar antes mesmo de enviar o arquivo. O que escrever aqui vai com contexto para a análise.</div>
+    <div class="nota-ia">Dica: escreva o que quer antes de analisar — a IA já responde e leva o pedido em conta.</div>
   </div>
 
   <div class="card">
     <h2>1. Mande seus dados</h2>
-    <label>Arquivo (CSV, Excel, TXT)</label>
-    <div class="upload-box" id="drop">Arraste aqui ou clique para selecionar<br><small>Valores positivos = entradas · negativos = saídas</small></div>
-    <input type="file" id="arquivo" class="hidden" accept=".csv,.xlsx,.xls,.txt">
-    <label>Ou cole os dados em texto <small>(formato: data;descrição;valor ou descrição;valor por linha)</small></label>
-    <textarea id="texto" placeholder="ex.: 05/01/2026;Venda cliente A;3500&#10;08/01/2026;Aluguel;-2500&#10;15/01/2026;Frete;-480"></textarea>
-    <div class="btn-row">
-      <button class="btn" id="btnAnalisar">🔍 Analisar caixa</button>
+    <div class="btn-row" style="margin-bottom:10px">
+      <button class="btn verde" onclick="mostrarModo('simples')" id="btnModoSimples" style="margin-top:0; padding:8px 14px; font-size:13px;">Analisar caixa</button>
+      <button class="btn" onclick="mostrarModo('comparar')" id="btnModoComparar" style="margin-top:0; padding:8px 14px; font-size:13px;">Comparar 2 planilhas</button>
     </div>
-    <div class="status hidden" id="status"></div>
+
+    <div id="modoSimples">
+      <label>Arquivo (CSV, Excel, TXT) — pode ser uma planilha completa de várias abas</label>
+      <div class="upload-box" id="drop">Arraste aqui ou clique para selecionar<br><small>Valores positivos = entradas · negativos = saídas</small></div>
+      <input type="file" id="arquivo" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+      <label>Ou cole os dados em texto <small>(formato: data;descrição;valor)</small></label>
+      <textarea id="texto" placeholder="ex.: 05/01/2026;Venda cliente A;3500&#10;08/01/2026;Aluguel;-2500"></textarea>
+      <div id="seletorAbas" class="hidden" style="margin-top:10px">
+        <label>Abas encontradas — clique para analisar uma específica:</label>
+        <div class="tabs" id="listaAbas"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btnAnalisar">🔍 Analisar caixa</button>
+        <button class="btn verde hidden" id="btnPrever">📈 Prever próximos 3 meses</button>
+      </div>
+      <div class="status hidden" id="status"></div>
+    </div>
+
+    <div id="modoComparar" class="hidden">
+      <label>Planilha 1</label>
+      <div class="upload-box" id="drop1">Arraste aqui ou clique para selecionar</div>
+      <input type="file" id="arquivo1" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+      <label>Planilha 2</label>
+      <div class="upload-box" id="drop2">Arraste aqui ou clique para selecionar</div>
+      <input type="file" id="arquivo2" class="hidden" accept=".csv,.xlsx,.xls,.txt">
+      <div class="btn-row">
+        <button class="btn" id="btnComparar">≠ Comparar planilhas</button>
+      </div>
+      <div class="status hidden" id="statusCmp"></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="cardHistorico">
+    <h2>🕘 Análises salvas</h2>
+    <div id="listaHistorico"></div>
+    <div class="nota-ia">Salvas localmente no seu navegador — clique para reabrir sem subir o arquivo de novo.</div>
   </div>
 
   <div id="resultado" class="hidden"></div>
@@ -99,57 +160,134 @@ const textoEl = document.getElementById('texto');
 const btn = document.getElementById('btnAnalisar');
 const status = document.getElementById('status');
 const resultado = document.getElementById('resultado');
+const btnPrever = document.getElementById('btnPrever');
 
 let ultimoResultado = null;
 let ultimosGraficos = null;
+let arquivoBytes = null;
+let arquivoNome = '';
+let abasEncontradas = [];
+let historicoChat = [];   // mensagens {role, content}
+let historicoSalvo = JSON.parse(localStorage.getItem('cfo_historico') || '[]');
 
-drop.addEventListener('click', () => inputArq.click());
-drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
-drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
-drop.addEventListener('drop', e => {
-  e.preventDefault(); drop.classList.remove('drag');
-  if (e.dataTransfer.files.length) {
-    inputArq.files = e.dataTransfer.files;
-    avisarArquivoCarregado();
-  }
+function mostrarModo(m) {
+  document.getElementById('modoSimples').classList.toggle('hidden', m !== 'simples');
+  document.getElementById('modoComparar').classList.toggle('hidden', m !== 'comparar');
+  document.getElementById('btnModoSimples').style.opacity = m === 'simples' ? 1 : .5;
+  document.getElementById('btnModoComparar').style.opacity = m === 'comparar' ? 1 : .5;
+}
+
+// ---------- tema ----------
+function alternarTema() {
+  const dark = document.body.classList.toggle('dark');
+  document.getElementById('btnTema').textContent = dark ? '☀️ Claro' : '🌙 Escuro';
+  localStorage.setItem('cfo_tema', dark ? 'dark' : 'light');
+}
+if (localStorage.getItem('cfo_tema') === 'dark') {
+  document.body.classList.add('dark');
+  document.getElementById('btnTema').textContent = '☀️ Claro';
+}
+
+// ---------- upload ----------
+function configDrop(el, inputId, onFile) {
+  el.addEventListener('click', () => document.getElementById(inputId).click());
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('drag');
+    if (e.dataTransfer.files.length) onFile(e.dataTransfer.files[0]);
+  });
+  document.getElementById(inputId).addEventListener('change', e => {
+    if (e.target.files.length) onFile(e.target.files[0]);
+  });
+}
+configDrop(drop, 'arquivo', (f) => {
+  drop.innerHTML = '📄 ' + f.name;
+  arquivoNome = f.name;
+  f.arrayBuffer().then(b => { arquivoBytes = new Uint8Array(b); });
+  avisarArquivoCarregado();
 });
-inputArq.addEventListener('change', () => {
-  if (inputArq.files.length) {
-    drop.innerHTML = '📄 ' + inputArq.files[0].name;
-    avisarArquivoCarregado();
-  }
+configDrop(document.getElementById('drop1'), 'arquivo1', (f) => {
+  document.getElementById('drop1').innerHTML = '📄 1: ' + f.name;
 });
-textoEl.addEventListener('input', () => {
-  if (textoEl.value.trim().length > 5) avisarArquivoCarregado();
+configDrop(document.getElementById('drop2'), 'arquivo2', (f) => {
+  document.getElementById('drop2').innerHTML = '📄 2: ' + f.name;
 });
 
-// Informa no chat que um arquivo/dados foi carregado
+textoEl.addEventListener('input', () => { if (textoEl.value.trim().length > 5) avisarArquivoCarregado(); });
+document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') perguntar(); });
+
+function temArquivoCarregado() {
+  return !!arquivoBytes || textoEl.value.trim().length > 0;
+}
+
 function avisarArquivoCarregado() {
-  const temArq = inputArq.files.length > 0;
-  const temTxt = textoEl.value.trim().length > 0;
-  if (!temArq && !temTxt) return;
-  const nome = temArq ? inputArq.files[0].name : 'dados colados';
-  chatAdd('ia', `✅ Recebi o arquivo "${nome}". Agora clique em **Analisar caixa** para eu processar os números e responder com base neles. Se quiser, escreva antes o que deseja que eu faça.`);
+  const nome = arquivoNome || (textoEl.value.trim() ? 'dados colados' : '');
+  if (!nome) return;
+  chatAdd('ia', `✅ Recebi "${nome}". Clique em **Analisar caixa** para eu processar.`);
 }
 
-// Enter no chat dispara o envio
-document.getElementById('chatInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') perguntar();
-});
-
-function fmtR(v) {
-  return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+// ---------- chat ----------
+function chatAdd(quem, texto) {
+  const box = document.getElementById('chatMsg');
+  const div = document.createElement('div');
+  div.className = 'msg ' + quem;
+  div.innerHTML = (quem === 'voce' ? '<b>Você:</b> ' : '<b>IA:</b> ') + esc(texto);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  historicoChat.push({ role: quem === 'voce' ? 'user' : 'assistant', content: texto });
+  if (historicoChat.length > 20) historicoChat = historicoChat.slice(-20);
 }
 
+async function perguntar() {
+  const inp = document.getElementById('chatInput');
+  const pergunta = inp.value.trim();
+  if (!pergunta) return;
+  inp.value = '';
+  chatAdd('voce', pergunta);
+
+  if (!ultimoResultado && temArquivoCarregado()) {
+    chatAdd('ia', '📄 Vejo que você já carregou o arquivo. Clique em **Analisar caixa** para eu usar seus dados de verdade. Depois me pergunte de novo. 😉');
+    return;
+  }
+
+  chatAdd('ia', 'Pensando...');
+  try {
+    const payload = {
+      pergunta: pergunta,
+      resumo: ultimoResultado?.resumo || '',
+      intencao_antes: !ultimoResultado,
+      historico: historicoChat.slice(-10),
+    };
+    if (ultimoResultado?.planilha_info?.estrutura) payload.estrutura = ultimoResultado.planilha_info.estrutura;
+    const resp = await fetch('/perguntar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    const box = document.getElementById('chatMsg');
+    if (box) box.lastChild.remove();
+    if (!resp.ok) { chatAdd('ia', 'Erro: ' + (data.erro || 'não foi possível responder.')); return; }
+    chatAdd('ia', data.resposta);
+  } catch (e) {
+    const box = document.getElementById('chatMsg');
+    if (box) box.lastChild.remove();
+    chatAdd('ia', 'Erro de conexão: ' + e.message);
+  }
+}
+
+// ---------- análise ----------
 btn.addEventListener('click', async () => {
+  if (!arquivoBytes && !textoEl.value.trim()) { mostrar('Escolha um arquivo ou cole os dados.', true); return; }
   const fd = new FormData();
-  if (inputArq.files.length) fd.append('arquivo', inputArq.files[0]);
-  const txt = textoEl.value.trim();
-  if (txt) fd.append('texto', txt);
-  if (intencaoUsuario) fd.append('intencao', intencaoUsuario);
-  if (!inputArq.files.length && !txt) { mostrar('Escolha um arquivo ou cole os dados.', true); return; }
-
-  btn.disabled = true; mostrar('Analisando... aguarde (a IA pode levar ~30s).', false);
+  if (arquivoBytes) fd.append('arquivo', new Blob([arquivoBytes]), arquivoNome);
+  if (textoEl.value.trim()) fd.append('texto', textoEl.value.trim());
+  if (historicoChat.length) {
+    const intencoes = historicoChat.filter(m => m.role === 'user').map(m => m.content).join(' | ');
+    fd.append('intencao', intencoes.slice(0, 500));
+  }
+  btn.disabled = true; mostrar('Analisando... aguarde (~30s).', false);
   try {
     const resp = await fetch('/analisar', { method: 'POST', body: fd });
     const data = await resp.json();
@@ -158,7 +296,8 @@ btn.addEventListener('click', async () => {
     ultimosGraficos = data.graficos;
     mostrar('');
     render(data.resultado, data.graficos);
-    chatAdd('ia', '✅ Análise concluída! Os números estão prontos acima. Agora pode me perguntar aqui no chat — vou responder com base nos seus dados reais (ex.: "projeta os próximos 3 meses", "onde posso cortar?").');
+    chatAdd('ia', '✅ Análise concluída! Pergunte qualquer coisa aqui, ou use os botões de download.');
+    salvarHistorico();
   } catch (e) {
     mostrar('Erro de conexão: ' + e.message, true);
   } finally {
@@ -172,107 +311,169 @@ function mostrar(msg, erro) {
   status.classList.toggle('erro', !!erro);
 }
 
+// ---------- render ----------
 function render(r, g) {
   const saldoCls = r.saldo >= 0 ? 'verde-c' : 'vermelho-c';
   const margem = r.margem !== null && r.margem !== undefined ? r.margem.toFixed(1) + '%' : 'não calculável';
 
   let html = '<div class="raiox">';
   html += '<h3>📊 Raio-X do Caixa</h3>';
+
+  if (r.tipo_analise === 'planilha_completa' || r.tipo_analise === 'aba_especifica' || r.tipo_analise === 'comparacao') {
+    html += renderEspecial(r, g);
+    html += '</div>';
+    resultado.innerHTML = html;
+    resultado.classList.remove('hidden');
+    return;
+  }
+
   html += '<div class="essencial">';
   html += `<div class="kpi"><div class="v verde-c">${fmtR(r.total_entradas)}</div><div class="r">Entrou</div></div>`;
   html += `<div class="kpi"><div class="v vermelho-c">${fmtR(r.total_saidas)}</div><div class="r">Saiu</div></div>`;
   html += `<div class="kpi"><div class="v ${saldoCls}">${fmtR(r.saldo)}</div><div class="r">Sobrou / Faltou</div></div>`;
-  html += `<div class="kpi"><div class="v">${margem}</div><div class="r">Margem do período</div></div>`;
+  html += `<div class="kpi"><div class="v">${margem}</div><div class="r">Margem</div></div>`;
   html += '</div>';
 
-  if (g.comparativo) html += `<div class="graf"><img src="${g.comparativo}" alt="Entradas x Saídas x Saldo"></div>`;
+  if (g.comparativo) html += grafHtml(g.comparativo, 'Entradas x Saídas x Saldo');
 
   if (Object.keys(r.gastos_categorias || {}).length) {
-    html += '<h4>📌 Pra onde foi o dinheiro</h4>';
-    html += '<table><tr><th>Categoria</th><th>Valor</th><th>%</th></tr>';
+    html += '<h4>📌 Pra onde foi o dinheiro</h4><table><tr><th>Categoria</th><th>Valor</th><th>%</th></tr>';
     const tot = r.total_saidas || 1;
     for (const [cat, val] of Object.entries(r.gastos_categorias)) {
       html += `<tr><td>${esc(cat)}</td><td>${fmtR(val)}</td><td>${(val / tot * 100).toFixed(1)}%</td></tr>`;
     }
     html += '</table>';
-    if (g.pizza_gastos) html += `<div class="graf"><img src="${g.pizza_gastos}" alt="Gastos por categoria"></div>`;
+    if (g.pizza_gastos) html += grafHtml(g.pizza_gastos, 'Gastos por categoria');
   }
 
-  if (g.fluxo_mensal) html += `<div class="graf"><img src="${g.fluxo_mensal}" alt="Fluxo por mês"></div>`;
+  if (g.fluxo_mensal) html += grafHtml(g.fluxo_mensal, 'Fluxo por mês');
 
   if ((r.alertas || []).length) {
-    html += '<h4>⚠️ Alertas automáticos</h4>';
-    for (const a of r.alertas) {
-      html += `<div class="alerta ${a.nivel}"><b>[${a.nivel.toUpperCase()}] ${esc(a.titulo)}</b><br>${esc(a.detalhe)}</div>`;
-    }
+    html += '<h4>⚠️ Alertas</h4>';
+    for (const a of r.alertas) html += `<div class="alerta ${a.nivel}"><b>[${a.nivel.toUpperCase()}] ${esc(a.titulo)}</b><br>${esc(a.detalhe)}</div>`;
   }
-
-  if (r.conferencia) {
-    const c = r.conferencia;
-    html += '<h4>📋 Resumo de conferência de dados</h4>';
-    html += '<table><tr><th>Item</th><th>Qtd</th></tr>';
-    html += `<tr><td>Lançamentos lidos</td><td>${c.lidos}</td></tr>`;
-    html += `<tr><td>Entradas</td><td>${c.entradas}</td></tr>`;
-    html += `<tr><td>Saídas</td><td>${c.saidas}</td></tr>`;
-    html += `<tr><td>Sem data</td><td>${c.sem_data}</td></tr>`;
-    html += `<tr><td>Sem descrição</td><td>${c.sem_descricao}</td></tr>`;
-    html += '</table>';
-    if (c.observacao) html += `<div class="nota-ia">${esc(c.observacao)}</div>`;
-  }
-
   if ((r.divergencias || []).length) {
-    const temCritica = r.divergencias.some(d => d.nivel === 'alto');
-    html += '<h4>🔍 Validações de consistência (confira antes de decidir)</h4>';
-    for (const d of r.divergencias) {
-      html += `<div class="alerta ${d.nivel}"><b>[${d.nivel.toUpperCase()}] ${esc(d.titulo)}</b><br>${esc(d.detalhe)}</div>`;
-    }
-    if (temCritica) {
-      html += '<div class="alerta alto"><b>⚠️ Para baixar o relatório, é preciso revisar e confirmar as divergências críticas acima.</b><br>';
-      html += '<label style="margin-top:8px; font-size:13px; display:flex; align-items:center; gap:8px;">';
-      html += '<input type="checkbox" id="confirmarDiv" onchange="divConfirmado(this)"> ';
-      html += 'Li e revisarei as divergências críticas — desejo baixar mesmo assim.</label></div>';
-    }
-    html += '<div class="nota-ia">Estas divergências foram detectadas automaticamente cruzando os seus dados. Vale confirmá-las antes de fechar qualquer decisão.</div>';
+    html += '<h4>🔍 Validações</h4>';
+    for (const d of r.divergencias) html += `<div class="alerta ${d.nivel}"><b>[${d.nivel.toUpperCase()}] ${esc(d.titulo)}</b><br>${esc(d.detalhe)}</div>`;
   }
+  if (r.narrativa_ia) html += '<h4>🧠 Análise da IA</h4><div class="ia">' + esc(r.narrativa_ia) + '</div>';
 
-  if (r.narrativa_ia) {
-    html += '<h4>🧠 Análise da IA (DeepSeek)</h4><div class="ia">' + esc(r.narrativa_ia) + '</div>';
-  } else if (r.erro_ia) {
-    html += `<h4>🤖 IA indisponível</h4><div class="alerta alto"><b>Erro:</b> ${esc(r.erro_ia)}</div>`;
-  } else {
-    html += '<div class="nota-ia">ℹ️ A análise por IA está desativada porque não configurei a chave DEEPSEEK_API_KEY. Os números automáticos acima continuam válidos.</div>';
-  }
-
-  if (r.tipo_analise === 'planilha_completa') {
-    html += '<h4 style="color:var(--azul); font-size:14px; margin:16px 0 8px;">📦 Baixar análise da planilha completa</h4>';
-    html += '<div class="btn-row">';
-    html += '<button class="btn verde" onclick="baixarPlanilha(\'pptx\')">📊 Apresentação PPTX</button>';
-    html += '<button class="btn verde" onclick="baixarPlanilha(\'word\')">📄 Relatório Word</button>';
-    html += '<button class="btn vermelho" onclick="baixarPlanilha(\'pdf\')">📕 Relatório PDF</button>';
-    html += '<button class="btn" onclick="baixarPlanilha(\'xlsx\')">📗 Planilha processada</button>';
-    html += '</div></div>';
-  } else {
-    html += '<div class="btn-row" style="margin-top:18px">';
-    html += '<button class="btn verde" onclick="baixar(\'word\')">📄 Baixar Word</button>';
-    html += '<button class="btn vermelho" onclick="baixar(\'pdf\')">📕 Baixar PDF</button>';
-    html += '<button class="btn" onclick="baixar(\'pptx\')">📊 Baixar PPTX</button>';
-    html += '</div></div>';
-  }
+  html += '<div class="btn-row" style="margin-top:18px">';
+  html += '<button class="btn verde" onclick="baixar(\'word\')">📄 Word</button>';
+  html += '<button class="btn vermelho" onclick="baixar(\'pdf\')">📕 PDF</button>';
+  html += '<button class="btn" onclick="baixar(\'pptx\')">📊 PPTX</button>';
+  html += '<button class="btn" onclick="prever()">📈 Prever 3 meses</button>';
+  html += '</div></div>';
 
   resultado.innerHTML = html;
   resultado.classList.remove('hidden');
 }
 
-function esc(s) {
-  if (!s) return '';
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function renderEspecial(r, g) {
+  let html = '';
+  if (r.tipo_analise === 'comparacao') {
+    html += '<h4>≠ Comparação de planilhas</h4>';
+    if (r.narrativa_ia) html += '<div class="ia">' + esc(r.narrativa_ia) + '</div>';
+  } else {
+    const abas = (r.planilha_info?.abas || []);
+    if (abas.length > 1 && !r.aba_analisada) {
+      html += '<h4>📚 Abas da planilha (clique para analisar uma específica)</h4><div class="tabs">';
+      for (const a of abas) {
+        const nome = typeof a === 'string' ? a : a.nome;
+        html += `<button class="tab" onclick="analisarAba('${esc(nome).replace(/'/g, "\\'")}')">${esc(nome)}</button>`;
+      }
+      html += '</div>';
+    }
+    if (r.narrativa_ia) html += '<h4>🧠 Análise da IA</h4><div class="ia">' + esc(r.narrativa_ia) + '</div>';
+  }
+  html += '<div class="btn-row" style="margin-top:18px">';
+  html += '<button class="btn verde" onclick="baixarPlanilha(\'pptx\')">📊 PPTX</button>';
+  html += '<button class="btn verde" onclick="baixarPlanilha(\'word\')">📄 Word</button>';
+  html += '<button class="btn vermelho" onclick="baixarPlanilha(\'pdf\')">📕 PDF</button>';
+  html += '<button class="btn" onclick="baixarPlanilha(\'xlsx\')">📗 XLSX</button>';
+  html += '</div>';
+  return html;
 }
 
-function divConfirmado(cb) {
-  ultimoResultado = ultimoResultado || {};
-  ultimoResultado.divergencias_confirmadas = cb.checked;
+function grafHtml(dataUrl, titulo) {
+  return `<div class="graf"><button class="dl-graf" onclick="baixarGrafico('${dataUrl}','${titulo}')">⬇ PNG</button><img src="${dataUrl}" alt="${esc(titulo)}"></div>`;
 }
 
+function baixarGrafico(dataUrl, nome) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = (nome || 'grafico').replace(/[^\w]+/g, '_') + '.png';
+  a.click();
+}
+
+// ---------- analisar aba específica ----------
+async function analisarAba(aba) {
+  if (!arquivoBytes) { alert('Re-envie o arquivo para analisar a aba.'); return; }
+  status.classList.remove('hidden'); status.textContent = `Analisando aba ${aba}...`;
+  const fd = new FormData();
+  fd.append('arquivo', new Blob([arquivoBytes]), arquivoNome);
+  fd.append('aba', aba);
+  if (historicoChat.length) {
+    fd.append('intencao', historicoChat.filter(m => m.role === 'user').map(m => m.content).join(' | ').slice(0, 500));
+  }
+  try {
+    const resp = await fetch('/analisar/aba', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) { mostrar(data.erro || 'Erro.', true); return; }
+    ultimoResultado = data.resultado;
+    ultimosGraficos = data.graficos;
+    mostrar('');
+    render(data.resultado, data.graficos);
+    chatAdd('ia', `✅ Aba "${aba}" analisada. Pergunte qualquer coisa sobre ela!`);
+  } catch (e) { mostrar('Erro: ' + e.message, true); }
+}
+
+// ---------- comparar ----------
+document.getElementById('btnComparar').addEventListener('click', async () => {
+  const f1 = document.getElementById('arquivo1').files[0];
+  const f2 = document.getElementById('arquivo2').files[0];
+  if (!f1 || !f2) { const s = document.getElementById('statusCmp'); s.textContent = 'Envie as duas planilhas.'; s.classList.remove('hidden'); s.classList.add('erro'); return; }
+  const fd = new FormData();
+  fd.append('arquivo1', f1);
+  fd.append('arquivo2', f2);
+  const s = document.getElementById('statusCmp');
+  s.textContent = 'Comparando...'; s.classList.remove('hidden'); s.classList.remove('erro');
+  try {
+    const resp = await fetch('/comparar', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) { s.textContent = data.erro; s.classList.add('erro'); return; }
+    s.classList.add('hidden');
+    ultimoResultado = data.resultado;
+    ultimosGraficos = data.graficos;
+    render(data.resultado, data.graficos);
+    chatAdd('ia', '✅ Comparação pronta! Pergunte o que mudou entre as duas.');
+  } catch (e) { s.textContent = 'Erro: ' + e.message; s.classList.add('erro'); }
+});
+
+// ---------- previsão ----------
+async function prever() {
+  if (!ultimoResultado) return;
+  chatAdd('ia', 'Pensando... gerando previsão dos próximos 3 meses.');
+  try {
+    const resp = await fetch('/previsao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resultado: ultimoResultado }),
+    });
+    const data = await resp.json();
+    const box = document.getElementById('chatMsg');
+    if (box) box.lastChild.remove();
+    if (!resp.ok) { chatAdd('ia', 'Erro: ' + (data.erro || '')); return; }
+    chatAdd('ia', data.resposta);
+  } catch (e) {
+    const box = document.getElementById('chatMsg');
+    if (box) box.lastChild.remove();
+    chatAdd('ia', 'Erro: ' + e.message);
+  }
+}
+btnPrever.addEventListener('click', prever);
+
+// ---------- downloads ----------
 async function baixar(formato) {
   if (!ultimoResultado) return;
   const resp = await fetch('/relatorio/' + formato, {
@@ -280,22 +481,12 @@ async function baixar(formato) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ resultado: ultimoResultado, graficos: ultimosGraficos }),
   });
-  if (resp.status === 422) {
-    try {
-      const d = await resp.json();
-      alert('⚠️ ' + (d.erro || 'Divergências críticas precisam ser confirmadas.'));
-    } catch (e) {
-      alert('⚠️ Revise as divergências críticas antes de baixar.');
-    }
-    return;
-  }
+  if (resp.status === 422) { alert('⚠️ Revise as divergências críticas antes de baixar.'); return; }
   if (!resp.ok) { alert('Erro ao gerar ' + formato.toUpperCase()); return; }
   const blob = await resp.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = 'raio-x-do-caixa.' + formato;
-  a.click();
+  a.href = url; a.download = 'raio-x-do-caixa.' + formato; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -304,10 +495,7 @@ async function baixarPlanilha(formato) {
   const resp = await fetch('/relatorio/planilha/' + formato, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      resultado: ultimoResultado,
-      planilha_info: ultimoResultado.planilha_info || {},
-    }),
+    body: JSON.stringify({ resultado: ultimoResultado, planilha_info: ultimoResultado.planilha_info || {} }),
   });
   if (!resp.ok) { alert('Erro ao gerar ' + formato.toUpperCase()); return; }
   const blob = await resp.blob();
@@ -315,84 +503,82 @@ async function baixarPlanilha(formato) {
   const a = document.createElement('a');
   a.href = url;
   const ext = formato === 'pptx' ? 'pptx' : formato === 'word' ? 'docx' : formato;
-  a.download = 'analise-planilha.' + ext;
-  a.click();
+  a.download = 'analise-planilha.' + ext; a.click();
   URL.revokeObjectURL(url);
 }
 
-function chatAdd(quem, texto) {
-  const box = document.getElementById('chatMsg');
-  if (!box) return;
-  const div = document.createElement('div');
-  div.style.margin = '6px 0';
-  div.style.padding = '8px 10px';
-  div.style.borderRadius = '8px';
-  div.style.fontSize = '13px';
-  div.style.whiteSpace = 'pre-wrap';
-  if (quem === 'voce') {
-    div.style.background = '#eef4ee';
-    div.style.textAlign = 'right';
-    div.innerHTML = '<b>Você:</b> ' + esc(texto);
-  } else {
-    div.style.background = '#f7f9fc';
-    div.innerHTML = '<b>IA:</b> ' + esc(texto);
-  }
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
+// ---------- histórico salvo ----------
+function salvarHistorico() {
+  if (!ultimoResultado) return;
+  const item = {
+    id: Date.now(),
+    nome: ultimoResultado.nome_arquivo || 'análise',
+    tipo: ultimoResultado.tipo_analise || 'extrato',
+    resumo: ultimoResultado.resumo || '',
+    estrutura: ultimoResultado.planilha_info?.estrutura || '',
+    data: new Date().toLocaleString('pt-BR'),
+    resultado: ultimoResultado,
+  };
+  historicoSalvo.unshift(item);
+  if (historicoSalvo.length > 10) historicoSalvo = historicoSalvo.slice(0, 10);
+  localStorage.setItem('cfo_historico', JSON.stringify(historicoSalvo));
+  renderHistorico();
 }
 
-let intencaoUsuario = "";
-
-function temArquivoCarregado() {
-  return inputArq.files.length > 0 || textoEl.value.trim().length > 0;
+function renderHistorico() {
+  const card = document.getElementById('cardHistorico');
+  const box = document.getElementById('listaHistorico');
+  if (!historicoSalvo.length) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  box.innerHTML = '';
+  for (const h of historicoSalvo) {
+    const d = document.createElement('div');
+    d.className = 'hist-item';
+    d.innerHTML = `<span>📄 ${esc(h.nome)} <small style="color:var(--muted)">(${esc(h.data)})</small></span>
+      <button class="lixo" onclick="removerHistorico(${h.id}, event)">🗑</button>`;
+    d.onclick = () => abrirHistorico(h.id);
+    box.appendChild(d);
+  }
+}
+function removerHistorico(id, ev) {
+  ev.stopPropagation();
+  historicoSalvo = historicoSalvo.filter(h => h.id !== id);
+  localStorage.setItem('cfo_historico', JSON.stringify(historicoSalvo));
+  renderHistorico();
+}
+function abrirHistorico(id) {
+  const h = historicoSalvo.find(x => x.id === id);
+  if (!h) return;
+  ultimoResultado = h.resultado || { resumo: h.resumo, planilha_info: { estrutura: h.estrutura }, nome_arquivo: h.nome };
+  ultimosGraficos = null;
+  render(ultimoResultado, {});
+  resultado.classList.remove('hidden');
+  resultado.scrollIntoView();
+  chatAdd('ia', `📂 Reabri "${h.nome}". Pergunte o que quiser!`);
 }
 
-async function perguntar() {
-  const inp = document.getElementById('chatInput');
-  const pergunta = inp.value.trim();
-  if (!pergunta) return;
-  inp.value = '';
-  chatAdd('voce', pergunta);
-
-  // Se ainda não analisou, mas já tem arquivo carregado, avisa para analisar
-  if (!ultimoResultado && temArquivoCarregado()) {
-    chatAdd('ia', '📄 Vejo que você já carregou o arquivo. Para eu responder com os seus números de verdade, clique em **Analisar caixa** logo abaixo. Depois volte aqui e me pergunte de novo — aí eu uso os dados reais. 😉');
-    intencaoUsuario = pergunta;
-    return;
-  }
-
-  chatAdd('ia', 'Pensando...');
+// ---------- painel de uso ----------
+async function verUso() {
   try {
-    const payload = {
-      pergunta: pergunta,
-      resumo: ultimoResultado?.resumo || '',
-      intencao_antes: !ultimoResultado,
-    };
-    // se for análise de planilha completa, envia a estrutura também
-    if (ultimoResultado?.planilha_info?.estrutura) {
-      payload.estrutura = ultimoResultado.planilha_info.estrutura;
-    }
-    const resp = await fetch('/perguntar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await resp.json();
-    const box = document.getElementById('chatMsg');
-    if (box) box.lastChild.remove();
-    if (!resp.ok) { chatAdd('ia', 'Erro: ' + (data.erro || 'não foi possível responder.')); return; }
-    chatAdd('ia', data.resposta);
-    // guarda a intenção do usuário para usar na análise
-    intencaoUsuario = pergunta;
-    if (!ultimoResultado) {
-      chatAdd('ia', '💡 Pronto! Agora suba o arquivo (ou cole os dados) e clique em Analisar caixa — levarei seu pedido em conta.');
-    }
-  } catch (e) {
-    const box = document.getElementById('chatMsg');
-    if (box) box.lastChild.remove();
-    chatAdd('ia', 'Erro de conexão: ' + e.message);
-  }
+    const resp = await fetch('/api/uso');
+    const u = await resp.json();
+    let msg = `📊 **Uso do site**\nTotal de requisições: ${u.total_requisicoes}\n\n`;
+    for (const r of (u.top_rotas || []).slice(0, 8)) msg += `${r.rota}: ${r.count}\n`;
+    chatAdd('ia', msg);
+  } catch (e) { chatAdd('ia', 'Erro ao buscar uso: ' + e.message); }
 }
+
+// ---------- utils ----------
+function fmtR(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+renderHistorico();
+chatAdd('ia', '👋 Olá! Sou o CFO de Bolso. Suba sua planilha (ou cole os dados), clique em Analisar, e me pergunte o que quiser. Posso comparar planilhas e prever os próximos 3 meses!');
 </script>
 </body>
 </html>

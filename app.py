@@ -245,14 +245,112 @@ def perguntar():
     pergunta = (data.get("pergunta") or "").strip()
     resumo = data.get("resumo") or ""
     estrutura = data.get("estrutura") or ""
+    historico = data.get("historico") or []
     if not pergunta:
         return jsonify({"erro": "Digite uma pergunta."}), 400
     try:
         if estrutura:
-            resposta = deepseek_client.perguntar_planilha(estrutura, pergunta)
+            resposta = deepseek_client.perguntar_planilha_historico(historico, estrutura, pergunta)
+        elif historico:
+            resposta = deepseek_client.perguntar_historico(historico, pergunta)
         else:
             resposta = deepseek_client.perguntar(resumo, pergunta)
         return jsonify({"resposta": resposta})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+
+@app.route("/analisar/aba", methods=["POST"])
+def analisar_aba():
+    """Analisa uma aba específica de uma planilha complexa."""
+    try:
+        arquivo = request.files.get("arquivo")
+        aba = (request.form.get("aba") or "").strip()
+        intencao = request.form.get("intencao", "")
+        if not arquivo or not arquivo.filename:
+            return jsonify({"erro": "Envie o arquivo."}), 400
+        if not _arquivo_permitido(arquivo.filename):
+            return jsonify({"erro": "Formato não suportado."}), 400
+        arquivo_bytes = arquivo.read()
+        nome_arquivo = secure_filename(arquivo.filename)
+
+        info = analise.ler_aba_especifica(arquivo_bytes, nome_arquivo, aba)
+        estrutura = info["resumo_texto"]
+        pergunta = intencao.strip() if intencao.strip() else (
+            f"Analise a aba '{aba}' em detalhe: o que ela contém, principais números, pontos de atenção e recomendações."
+        )
+        try:
+            narrativa = deepseek_client.perguntar_planilha(estrutura, pergunta)
+            erro_ia = None
+        except Exception as e:
+            narrativa = None
+            erro_ia = str(e)
+
+        resultado = {
+            "tipo_analise": "aba_especifica",
+            "nome_arquivo": nome_arquivo,
+            "aba_analisada": aba,
+            "alertas": [],
+            "divergencias": [],
+            "conferencia": {"observacao": f"Aba '{aba}' analisada em detalhe."},
+            "narrativa_ia": narrativa,
+            "erro_ia": erro_ia,
+            "resumo": estrutura,
+            "graf": {},
+            "planilha_info": {"n_abas": 1, "abas": [{"nome": aba}], "estrutura": estrutura},
+        }
+        return jsonify({"resultado": resultado, "graficos": {}})
+    except ValueError as e:
+        return jsonify({"erro": str(e)}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"erro": f"Erro ao analisar aba: {e}"}), 500
+
+
+@app.route("/comparar", methods=["POST"])
+def comparar():
+    """Compara duas planilhas e aponta diferenças."""
+    try:
+        arq1 = request.files.get("arquivo1")
+        arq2 = request.files.get("arquivo2")
+        if not arq1 or not arq1.filename or not arq2 or not arq2.filename:
+            return jsonify({"erro": "Envie as duas planilhas."}), 400
+        n1 = secure_filename(arq1.filename)
+        n2 = secure_filename(arq2.filename)
+        info = analise.comparar_planilhas(arq1.read(), n1, arq2.read(), n2)
+        try:
+            narrativa = deepseek_client.comparar_planilhas(info["resumo_texto"])
+            erro_ia = None
+        except Exception as e:
+            narrativa = None
+            erro_ia = str(e)
+        resultado = {
+            "tipo_analise": "comparacao",
+            "nome_arquivo": f"{n1} vs {n2}",
+            "alertas": [],
+            "divergencias": [],
+            "conferencia": {"observacao": "Comparação de duas planilhas."},
+            "narrativa_ia": narrativa,
+            "erro_ia": erro_ia,
+            "resumo": info["resumo_texto"],
+            "graf": {},
+            "comparacao": {"planilha1": info["planilha1"], "planilha2": info["planilha2"]},
+        }
+        return jsonify({"resultado": resultado, "graficos": {}})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"erro": f"Erro ao comparar: {e}"}), 500
+
+
+@app.route("/previsao", methods=["POST"])
+def previsao():
+    """Gera previsão dos próximos 3 meses com base na análise atual."""
+    data = request.get_json(force=True)
+    resultado = data.get("resultado", {})
+    try:
+        contexto = analise.preparar_previsao(resultado)
+        resposta = deepseek_client.prever_proximos_meses(contexto)
+        return jsonify({"resposta": resposta, "contexto": contexto})
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
@@ -286,6 +384,47 @@ def relatorio_planilha(formato):
     except Exception as e:
         traceback.print_exc()
         return jsonify({"erro": f"Erro ao gerar: {e}"}), 500
+
+
+# ---------- logs de uso (simples, em memória) ----------
+import collections
+import time as _time
+
+USO = collections.Counter()          # contagem por tipo de ação
+USO_IP = collections.Counter()       # contagem por IP
+USO_DETALHES = []                     # últimas ações
+
+
+def _registrar_uso(acao, ip=""):
+    USO[acao] += 1
+    if ip:
+        USO_IP[ip] += 1
+    USO_DETALHES.append({"t": _time.time(), "acao": acao, "ip": ip})
+    if len(USO_DETALHES) > 200:
+        USO_DETALHES.pop(0)
+
+
+@app.after_request
+def _log_uso_geral(resp):
+    try:
+        _registrar_uso(f"HTTP {resp.status_code} {request.method} {request.path}", request.remote_addr or "")
+    except Exception:
+        pass
+    return resp
+
+
+@app.route("/api/uso", methods=["GET"])
+def api_uso():
+    """Painel simples de uso (contagem de acessos/ações)."""
+    total = sum(USO.values())
+    top_rotas = USO.most_common(15)
+    top_ips = USO_IP.most_common(10)
+    return jsonify({
+        "total_requisicoes": total,
+        "top_rotas": [{"rota": r, "count": c} for r, c in top_rotas],
+        "top_ips": [{"ip": ip, "count": c} for ip, c in top_ips],
+        "recentes": USO_DETALHES[-20:],
+    })
 
 
 if __name__ == "__main__":

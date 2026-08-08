@@ -606,3 +606,94 @@ def ler_planilha_completa(arquivo: bytes, nome_arquivo: str = "") -> dict:
         "abas": abas_info,
         "resumo_texto": texto,
     }
+
+
+
+# --------------------------------------------------------------------------
+# 5. FUNÇÕES AVANÇADAS: aba específica, comparação, previsão
+# --------------------------------------------------------------------------
+
+def ler_aba_especifica(arquivo: bytes, nome_arquivo: str, aba_nome: str) -> dict:
+    """Lê apenas uma aba específica de uma planilha."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(io.BytesIO(arquivo), data_only=True, read_only=True)
+    abas = wb.sheetnames
+    if aba_nome not in abas:
+        wb.close()
+        raise ValueError(f"Aba '{aba_nome}' não encontrada. Abas disponíveis: {', '.join(abas[:10])}")
+    ws = wb[aba_nome]
+    linhas = []
+    for i, row in enumerate(ws.iter_rows(values_only=True)):
+        if i > 60:
+            break
+        vals = []
+        for v in row:
+            if v is None:
+                vals.append("")
+            elif isinstance(v, float) and v == int(v):
+                vals.append(str(int(v)))
+            else:
+                vals.append(str(v))
+        vals = [v for v in vals if v != ""]
+        if vals:
+            linhas.append(vals)
+    wb.close()
+
+    texto = f"ABA: {aba_nome} ({len(linhas)} linhas)\n"
+    for l in linhas[:40]:
+        texto += "  " + " | ".join(l)[:200] + "\n"
+
+    return {
+        "tipo": "aba_especifica",
+        "aba": aba_nome,
+        "linhas": linhas[:40],
+        "resumo_texto": texto,
+    }
+
+
+def comparar_planilhas(arquivo1: bytes, nome1: str, arquivo2: bytes, nome2: str) -> dict:
+    """Lê duas planilhas e monta estrutura comparativa para a IA."""
+    import openpyxl
+
+    def ler_resumo(arquivo, nome):
+        wb = openpyxl.load_workbook(io.BytesIO(arquivo), data_only=True, read_only=True)
+        out = [f"ARQUIVO: {nome}"]
+        for sn in wb.sheetnames[:15]:
+            ws = wb[sn]
+            linhas = []
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i > 20:
+                    break
+                vals = [str(v) for v in row if v is not None and str(v) != ""]
+                if vals:
+                    linhas.append(" | ".join(vals)[:150])
+            out.append(f"--- ABA {sn} ({len(linhas)} linhas) ---")
+            out.extend(linhas[:15])
+        wb.close()
+        return "\n".join(out)
+
+    r1 = ler_resumo(arquivo1, nome1)
+    r2 = ler_resumo(arquivo2, nome2)
+    texto = (
+        "COMPARAÇÃO DE DUAS PLANILHAS.\n\n"
+        "PLANILHA 1:\n" + r1 + "\n\nPLANILHA 2:\n" + r2
+    )
+    return {"tipo": "comparacao", "resumo_texto": texto, "planilha1": r1, "planilha2": r2}
+
+
+def preparar_previsao(resultado: dict) -> str:
+    """Monta contexto de previsão para os próximos 3 meses a partir do resultado."""
+    linhas = []
+    if resultado.get("por_mes"):
+        linhas.append("Fluxo mensal real disponível:")
+        for mes, v in resultado["por_mes"].items():
+            linhas.append(f"  {mes}: entradas R$ {v['entradas']:,.2f} | saídas R$ {v['saidas']:,.2f} | saldo R$ {v['saldo']:,.2f}")
+    linhas.append(f"Total entradas: R$ {resultado.get('total_entradas',0):,.2f}")
+    linhas.append(f"Total saídas: R$ {resultado.get('total_saidas',0):,.2f}")
+    linhas.append(f"Saldo: R$ {resultado.get('saldo',0):,.2f}")
+    if resultado.get("gastos_categorias"):
+        linhas.append("Saídas por categoria:")
+        for c, v in list(resultado["gastos_categorias"].items())[:8]:
+            linhas.append(f"  {c}: R$ {v:,.2f}")
+    return "\n".join(linhas)

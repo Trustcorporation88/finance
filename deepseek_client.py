@@ -184,3 +184,151 @@ def perguntar_planilha(estrutura_texto: str, pergunta: str, api_key: str = None,
         raise RuntimeError(f"Erro na API DeepSeek (HTTP {e.response.status_code if e.response else '?'}): {corpo}")
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")
+
+
+
+def perguntar_historico(historico, pergunta, api_key=None, modelo=None):
+    """Chat multi-turno: recebe histórico de mensagens e responde mantendo contexto.
+
+    historico: lista de dicts {"role": "user"/"assistant", "content": "..."}
+    """
+    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return "IA desativada: configure a chave DEEPSEEK_API_KEY para usar o chat."
+
+    modelo = modelo or os.environ.get("DEEPSEEK_MODEL", MODELO_PADRAO)
+
+    messages = [{"role": "system", "content": SYSTEM_PROMPT_CHAT}]
+    for msg in historico[-10:]:
+        if msg.get("role") in ("user", "assistant") and msg.get("content"):
+            messages.append({"role": msg["role"], "content": str(msg["content"])[:2000]})
+    messages.append({"role": "user", "content": pergunta})
+
+    payload = {
+        "model": modelo,
+        "messages": messages,
+        "temperature": 0.4,
+        "max_tokens": 2000,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = requests.post(API_URL, headers=headers, json=payload, timeout=120)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        corpo = e.response.text[:400] if e.response is not None else str(e)
+        raise RuntimeError(f"Erro na API DeepSeek (HTTP {e.response.status_code if e.response else '?'}): {corpo}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")
+
+
+def perguntar_planilha_historico(historico, estrutura_texto, pergunta, api_key=None, modelo=None):
+    """Chat multi-turno para planilhas completas (mantém contexto da planilha)."""
+    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return "IA desativada: configure a chave DEEPSEEK_API_KEY para usar o chat."
+
+    modelo = modelo or os.environ.get("DEEPSEEK_MODEL", MODELO_PADRAO)
+
+    messages = [{"role": "system", "content": SYSTEM_PROMPT_PLANILHA}]
+    messages.append({"role": "system", "content": "ESTRUTURA DA PLANILHA (referência, use sempre que preciso):\n" + estrutura_texto})
+    for msg in historico[-8:]:
+        if msg.get("role") in ("user", "assistant") and msg.get("content"):
+            messages.append({"role": msg["role"], "content": str(msg["content"])[:2000]})
+    messages.append({"role": "user", "content": pergunta})
+
+    payload = {
+        "model": modelo,
+        "messages": messages,
+        "temperature": 0.4,
+        "max_tokens": 2000,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = requests.post(API_URL, headers=headers, json=payload, timeout=120)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        corpo = e.response.text[:400] if e.response is not None else str(e)
+        raise RuntimeError(f"Erro na API DeepSeek (HTTP {e.response.status_code if e.response else '?'}): {corpo}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")
+
+
+
+SYSTEM_PROMPT_COMPARAR = """Você é um auditor de planilhas sênior. O usuário enviou DUAS planilhas (ou duas versões) e quer saber as diferenças.
+
+Você receberá a estrutura/resumo das duas. Compare e aponte:
+1. Abas que existem em uma e não na outra.
+2. Diferenças de valores nos pontos equivalentes (orçado vs realizado, versão A vs B).
+3. O que mudou de mais relevante e o que isso significa.
+4. Riscos ou divergências que merecem atenção.
+
+Responda em português do Brasil, linguagem de dono de empresa. Use tabelas quando ajudar. Não invente valores que não estejam nos dados fornecidos."""
+
+
+SYSTEM_PROMPT_PREVISAO = """Você é um CFO analítico. O usuário quer uma PREVISÃO dos próximos 3 meses do caixa.
+
+Você receberá os números reais (entradas, saídas, saldo, categorias, fluxo mensal). Projete os próximos 3 meses:
+1. Estimativa de entradas, saídas e saldo por mês.
+2. Cenário pessimista, realista e otimista.
+3. Pontos de atenção (mês que aperta, risco de queimar caixa).
+4. Recomendações práticas.
+
+Deixe CLARO que é uma projeção/estimativa baseada nos dados atuais, não garantia. Responda em português do Brasil."""
+
+
+def comparar_planilhas(estrutura_texto: str, api_key=None, modelo=None):
+    """IA compara duas planilhas e aponta diferenças."""
+    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return "IA desativada: configure a chave DEEPSEEK_API_KEY para usar o chat."
+    modelo = modelo or os.environ.get("DEEPSEEK_MODEL", MODELO_PADRAO)
+    payload = {
+        "model": modelo,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_COMPARAR},
+            {"role": "user", "content": estrutura_texto},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 2000,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        resp = requests.post(API_URL, headers=headers, json=payload, timeout=120)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")
+
+
+def prever_proximos_meses(contexto: str, api_key=None, modelo=None):
+    """IA projeta os próximos 3 meses com base nos números."""
+    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return "IA desativada: configure a chave DEEPSEEK_API_KEY para usar o chat."
+    modelo = modelo or os.environ.get("DEEPSEEK_MODEL", MODELO_PADRAO)
+    payload = {
+        "model": modelo,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_PREVISAO},
+            {"role": "user", "content": contexto},
+        ],
+        "temperature": 0.4,
+        "max_tokens": 2000,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        resp = requests.post(API_URL, headers=headers, json=payload, timeout=120)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")
