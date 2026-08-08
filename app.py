@@ -175,8 +175,16 @@ def _processar_planilha_completa(arquivo_bytes, nome_arquivo, intencao=""):
         "Faça um resumo executivo desta planilha: o que ela contém, os principais "
         "números por aba, pontos de atenção e recomendações práticas."
     )
+    # Detecção de pedido de estudo completo / análise geral profunda
+    alvo = (intencao or "").lower()
+    palavras_estudo = ["estudo", "completo", "análise geral", "analise geral", "geral", "completa",
+                       "detalhado", "raiz", "entenda", "entender", "fundo", "profunda"]
+    eh_estudo = any(p in alvo for p in palavras_estudo)
     try:
-        narrativa = deepseek_client.perguntar_planilha(estrutura, pergunta)
+        if eh_estudo:
+            narrativa = deepseek_client.estudo_completo(estrutura)
+        else:
+            narrativa = deepseek_client.perguntar_planilha(estrutura, pergunta)
         erro_ia = None
     except Exception as e:
         narrativa = None
@@ -184,6 +192,7 @@ def _processar_planilha_completa(arquivo_bytes, nome_arquivo, intencao=""):
 
     resultado = {
         "tipo_analise": "planilha_completa",
+        "modo_estudo": eh_estudo,
         "total_entradas": 0,
         "total_saidas": 0,
         "saldo": 0,

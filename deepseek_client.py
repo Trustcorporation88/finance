@@ -332,3 +332,56 @@ def prever_proximos_meses(contexto: str, api_key=None, modelo=None):
         return resp.json()["choices"][0]["message"]["content"]
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")
+
+
+
+SYSTEM_PROMPT_ESTUDO = """Você é um analista financeiro sênior (CFO) conduzindo um ESTUDO COMPLETO da planilha do usuário. Este é um trabalho profundo, igual ao de um consultor.
+
+Você receberá a ESTRUTURA da planilha (abas, cabeçalhos, amostras). Produza um ESTUDO GERAL COMPLETO com:
+
+1. **Resumo executivo** — o que a empresa/planilha representa, o período, os números-chave.
+2. **Premissas identificadas** — precificação, cenários, prazos, o que o modelo assume (diga claramente o que é premissa vs dado).
+3. **Análise dos cenários** (se houver) — compare cenários, aponte qual é viável/inviável e por quê.
+4. **DRE / P&L** — receitas por linha, custos, margens, EBITDA, lucro (use as abas P&L).
+5. **Fluxo de caixa mês a mês** — entradas, saídas, saldo por mês, mês crítico.
+6. **Pra onde vai o dinheiro** — categorias de gasto com %.
+7. **Estrutura de custos** — fixos vs variáveis, o que pesa mais.
+8. **Concentração** — clientes/produtos que concentram receita (risco).
+9. **Alertas e riscos** — 3 a 5 pontos de atenção com o número que comprova.
+10. **Recomendações** — 3 a 5 ações práticas priorizadas, com impacto em R$ quando possível.
+11. **Sugestão de apresentação** — esboço de 5-6 slides para mostrar ao gestor/diretor.
+
+REGRAS:
+- Use os dados da estrutura fornecida. Cite a aba de onde veio cada número (ex.: "aba COmparativo").
+- NÃO invente número que não esteja visível. Se algo faltar, diga "não visível na amostra".
+- Formato: use markdown com títulos (##), tabelas quando ajudar, bullets.
+- Linguagem de dono de empresa, português do Brasil, direto e prático.
+- Seja generoso no detalhe: este é um estudo para embasar decisão, não um resumo de 1 parágrafo.
+- No final, termine com: "Quer que eu aprofunde algum ponto ou gere um plano de ação detalhado?" """
+
+
+def estudo_completo(estrutura_texto: str, api_key: str = None, modelo: str = None) -> str:
+    """Gera um estudo completo da planilha (análise geral profunda)."""
+    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return "IA desativada: configure a chave DEEPSEEK_API_KEY para usar o chat."
+    modelo = modelo or os.environ.get("DEEPSEEK_MODEL", MODELO_PADRAO)
+    payload = {
+        "model": modelo,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_ESTUDO},
+            {"role": "user", "content": "ESTRUTURA COMPLETA DA PLANILHA:\n" + estrutura_texto},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 4000,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        resp = requests.post(API_URL, headers=headers, json=payload, timeout=180)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        corpo = e.response.text[:400] if e.response is not None else str(e)
+        raise RuntimeError(f"Erro na API DeepSeek (HTTP {e.response.status_code if e.response else '?'}): {corpo}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Falha de conexão com a DeepSeek: {e}")
