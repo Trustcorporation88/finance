@@ -10,6 +10,12 @@ from __future__ import annotations
 import io
 import base64
 
+import os
+
+# Marca TRUST
+LOGO_TRUST = os.path.join(os.path.dirname(__file__), "static", "logo-trust.png")
+MARCA = "TRUST CORPORATION · CFO de Bolso"
+
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 
@@ -126,6 +132,8 @@ def gerar_word(resultado: dict, graf: dict) -> io.BytesIO:
     r.font.color.rgb = CINZA
 
     buf = io.BytesIO()
+    # rodapé da marca
+    _rodape_word(doc)
     doc.save(buf)
     buf.seek(0)
     return buf
@@ -164,8 +172,9 @@ def gerar_pdf(resultado: dict, graf: dict) -> io.BytesIO:
                           textColor=HexColor("#555555"), italic=True)
 
     elementos = []
-    elementos.append(Paragraph("Raio-X do Caixa — CFO de Bolso", titulo))
-    elementos.append(Paragraph("Números calculados em regime de caixa, direto dos seus dados.", nota))
+    _marca_pdf(doc, elementos)
+    elementos.append(Paragraph("Raio-X do Caixa \u2014 CFO de Bolso", titulo))
+    elementos.append(Paragraph("N\u00fameros calculados em regime de caixa, direto dos seus dados.", nota))
     elementos.append(Spacer(1, 8))
 
     elementos.append(Paragraph("O essencial (em 1 olhada)", h2))
@@ -233,10 +242,58 @@ def gerar_pdf(resultado: dict, graf: dict) -> io.BytesIO:
 
     elementos.append(Spacer(1, 12))
     elementos.append(Paragraph("Lembrete: é gestão de caixa gerencial. Para imposto/nota fiscal, fale com seu contador.", nota))
+    _rodape_pdf(elementos)
 
     doc.build(elementos)
     buf.seek(0)
     return buf
+
+
+
+
+def _rodape_word(doc):
+    """Adiciona o rodapé com a marca TRUST no fim do documento."""
+    try:
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        r = p.add_run(MARCA)
+        r.italic = True
+        r.font.size = Pt(8)
+        r.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+    except Exception:
+        pass
+
+
+def _marca_pdf(doc, elementos):
+    """Adiciona logotipo e rodapé da marca TRUST no PDF."""
+    from reportlab.platypus import Image as RLImage, HRFlowable
+    try:
+        if os.path.exists(LOGO_TRUST):
+            img = RLImage(LOGO_TRUST, width=45 * mm, height=45 * mm)
+            img.hAlign = "LEFT"
+            elementos.append(img)
+        else:
+            elementos.append(Paragraph("<b>TRUST CORPORATION</b>", estilos_titulo()))
+        elementos.append(HRFlowable(width="100%", thickness=1, color=HexColor("#1F3B73")))
+    except Exception:
+        pass
+
+
+def estilos_titulo():
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.colors import HexColor
+    e = getSampleStyleSheet()
+    return ParagraphStyle("TituloTrust", parent=e["Title"], fontSize=18,
+                          textColor=HexColor("#1F3B73"))
+
+
+def _rodape_pdf(elementos, texto="TRUST CORPORATION"):
+    from reportlab.platypus import Spacer, Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.colors import HexColor
+    st = ParagraphStyle("Rodape", fontSize=8, textColor=HexColor("#888888"), alignment=1)
+    elementos.append(Spacer(1, 10))
+    elementos.append(Paragraph(texto, st))
 
 
 # ==========================================================================
@@ -290,9 +347,20 @@ def gerar_pptx(resultado: dict, graf: dict) -> io.BytesIO:
 
     def cabecalho(slide, titulo, sub=None):
         caixa(slide, 0, 0, 13.333, 0.95, AZUL_P)
-        texto(slide, 0.4, 0.16, 12.5, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
-        if sub:
-            texto(slide, 0.4, 0.55, 12.5, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
+        try:
+            if os.path.exists(LOGO_TRUST):
+                slide.shapes.add_picture(LOGO_TRUST, PptxInches(0.3), PptxInches(0.14), height=PptxInches(0.65))
+                texto(slide, 2.3, 0.16, 10.9, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
+                if sub:
+                    texto(slide, 2.3, 0.55, 10.9, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
+            else:
+                texto(slide, 0.4, 0.16, 12.5, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
+                if sub:
+                    texto(slide, 0.4, 0.55, 12.5, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
+        except Exception:
+            texto(slide, 0.4, 0.16, 12.5, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
+            if sub:
+                texto(slide, 0.4, 0.55, 12.5, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
 
     def tabela(slide, l, t, w, rows, col_w=None, font_size=12, header_font=12):
         nrows = len(rows)
@@ -470,9 +538,20 @@ def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
 
     def cabecalho(slide, titulo, sub=None):
         caixa(slide, 0, 0, 13.333, 0.95, AZUL_P)
-        texto(slide, 0.4, 0.16, 12.5, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
-        if sub:
-            texto(slide, 0.4, 0.55, 12.5, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
+        try:
+            if os.path.exists(LOGO_TRUST):
+                slide.shapes.add_picture(LOGO_TRUST, PptxInches(0.3), PptxInches(0.14), height=PptxInches(0.65))
+                texto(slide, 2.3, 0.16, 10.9, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
+                if sub:
+                    texto(slide, 2.3, 0.55, 10.9, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
+            else:
+                texto(slide, 0.4, 0.16, 12.5, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
+                if sub:
+                    texto(slide, 0.4, 0.55, 12.5, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
+        except Exception:
+            texto(slide, 0.4, 0.16, 12.5, 0.7, titulo, size=24, bold=True, cor=BRANCO_P)
+            if sub:
+                texto(slide, 0.4, 0.55, 12.5, 0.4, sub, size=12, cor=PptxRGBColor(0xE8, 0xF2, 0xE8))
 
     def tabela(slide, l, t, w, rows, col_w=None, font_size=10, header_font=10):
         nrows = len(rows)
@@ -589,6 +668,8 @@ def gerar_word_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
         doc.add_paragraph(resultado["narrativa_ia"])
 
     buf = io.BytesIO()
+    # rodapé da marca
+    _rodape_word(doc)
     doc.save(buf)
     buf.seek(0)
     return buf
@@ -608,6 +689,7 @@ def gerar_pdf_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
     nota = ParagraphStyle("Nota", parent=estilos["BodyText"], fontSize=8, textColor=HexColor("#555555"), italic=True)
 
     elementos = []
+    _marca_pdf(doc, elementos)
     elementos.append(Paragraph("Análise da Planilha", titulo))
     elementos.append(Paragraph(f"{resultado.get('nome_arquivo','planilha')} · {info.get('n_abas',0)} abas", nota))
     elementos.append(Spacer(1, 8))
@@ -637,6 +719,7 @@ def gerar_pdf_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
         for bloco in resultado["narrativa_ia"].split("\n\n"):
             elementos.append(Paragraph(bloco.replace("\n", "<br/>"), corpo))
 
+    _rodape_pdf(elementos, "TRUST CORPORATION")
     doc.build(elementos)
     buf.seek(0)
     return buf
