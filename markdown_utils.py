@@ -82,7 +82,7 @@ def parse_blocks(md: str):
             if tabela_atual is None:
                 tabela_atual = []
                 blocos.append({"tipo": "table", "linhas": tabela_atual})
-            tabela_atual.append(cells)
+            tabela_atual.append([_marcar(c) for c in cells])
             i += 1
             continue
         else:

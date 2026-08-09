@@ -160,6 +160,12 @@ def _adicionar_runs_docx(p, texto_marcado):
         r.font.size = Pt(11)
 
 
+def _limpar_marcadores(texto: str) -> str:
+    """Remove marcadores %B% e %I% de um texto (para headings/títulos)."""
+    import re
+    return re.sub(r"%[BI]%", "", texto)
+
+
 def _adicionar_blocos_word(doc, blocos):
     """Renderiza blocos de markdown num documento Word."""
     for b in blocos:
@@ -171,7 +177,9 @@ def _adicionar_blocos_word(doc, blocos):
             _adicionar_runs_docx(p, b["texto"])
         elif tipo in ("h1", "h2", "h3", "h4"):
             nivel = int(tipo[1]) - 1
-            doc.add_heading(b["texto"], level=nivel)
+            h = doc.add_heading(level=nivel)
+            h.clear()
+            _adicionar_runs_docx(h, b["texto"])
         elif tipo in ("ul", "ol"):
             for item in b["itens"]:
                 p = doc.add_paragraph(style="List Bullet" if tipo == "ul" else "List Number")
@@ -179,17 +187,22 @@ def _adicionar_blocos_word(doc, blocos):
         elif tipo == "blockquote":
             p = doc.add_paragraph()
             _adicionar_runs_docx(p, b["texto"])
-            for pr in p.runs:
-                pr.italic = True
-                pr.font.color.rgb = CINZA
+            for r in p.runs:
+                r.italic = True
+                r.font.color.rgb = CINZA
         elif tipo == "table":
             linhas = b["linhas"]
-            t = doc.add_table(rows=len(linhas), cols=len(linhas[0]))
+            if not linhas:
+                continue
+            ncols = max(len(r) for r in linhas) if linhas else 1
+            t = doc.add_table(rows=len(linhas), cols=ncols)
             t.style = "Light Grid Accent 1"
             for i, linha in enumerate(linhas):
-                for j, cel in enumerate(linha):
-                    if j < len(linhas[0]):
-                        t.cell(i, j).text = cel
+                for j in range(ncols):
+                    cel = linha[j] if j < len(linha) else ""
+                    cell = t.cell(i, j)
+                    cell.text = ""
+                    _adicionar_runs_docx(cell.paragraphs[0], cel)
             _estilizar_tabela_docx(t)
             doc.add_paragraph()
 
@@ -324,9 +337,18 @@ def _adicionar_blocos_pdf(elementos, blocos, corpo, h2):
         elif tipo == "table":
             linhas = b["linhas"]
             ncol = max(len(r) for r in linhas)
-            linhas = [r + [""] * (ncol - len(r)) for r in linhas]
+            st_celula = ParagraphStyle("Cel", parent=corpo, fontSize=8, leading=10)
+            linhas_fmt = []
+            for r in linhas:
+                row_paras = []
+                for c in r:
+                    row_paras.append(Paragraph(mdu.runs_para_reportlab(c), st_celula))
+                # completa colunas
+                while len(row_paras) < ncol:
+                    row_paras.append(Paragraph("", st_celula))
+                linhas_fmt.append(row_paras)
             larg = 175 / ncol if ncol else 175
-            tbl = Table(linhas, colWidths=[larg * mm] * ncol)
+            tbl = Table(linhas_fmt, colWidths=[larg * mm] * ncol)
             tbl.setStyle(TableStyle([
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 8.5),
@@ -605,7 +627,7 @@ def _adicionar_blocos_pptx(slide, md, size=14):
         tf.word_wrap = True
         p = tf.paragraphs[0]
         r = p.add_run()
-        r.text = conteudo
+        r.text = _limpar_marcadores(conteudo)
         r.font.size = PptxPt(sz)
         r.font.bold = bold
         r.font.color.rgb = cor
@@ -893,17 +915,17 @@ def gerar_xlsx_processado(resultado: dict, info: dict = None) -> io.BytesIO:
         for b in mdu.parse_blocks(resultado["narrativa_ia"]):
             tipo = b["tipo"]
             if tipo in ("h1", "h2", "h3", "h4"):
-                ws_ia.append([b["texto"], ""])
+                ws_ia.append([_limpar_marcadores(b["texto"]), ""])
             elif tipo == "p":
-                ws_ia.append(["", b["texto"]])
+                ws_ia.append(["", _limpar_marcadores(b["texto"])])
             elif tipo in ("ul", "ol"):
                 for item in b["itens"]:
-                    ws_ia.append(["• item", item])
+                    ws_ia.append(["• item", _limpar_marcadores(item)])
             elif tipo == "blockquote":
-                ws_ia.append(["destaque", b["texto"]])
+                ws_ia.append(["destaque", _limpar_marcadores(b["texto"])])
             elif tipo == "table":
                 for linha in b["linhas"]:
-                    ws_ia.append(["", " | ".join(str(c) for c in linha)])
+                    ws_ia.append(["", " | ".join(_limpar_marcadores(str(c)) for c in linha)])
 
     buf = io.BytesIO()
     wb.save(buf)
