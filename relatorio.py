@@ -667,7 +667,6 @@ def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
     if not PPTX_DISPONIVEL:
         raise RuntimeError("python-pptx não instalado no servidor.")
     info = info or resultado.get("planilha_info", {})
-    abas = info.get("abas", [])
 
     prs = PptxPresentation()
     prs.slide_width = PptxInches(13.333)
@@ -754,27 +753,6 @@ def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
     linhas_tab = [["Aba", "Linhas", "Colunas", "Conteúdo"]] + _abas_para_linhas(info)
     tabela(s, 0.4, 1.3, 12.5, linhas_tab, col_w=[3.2, 1.3, 1.2, 4.8], font_size=10, header_font=10)
 
-    # Slides por aba (até 8 abas mais importantes para não estourar)
-    slides_aba = abas[:8]
-    for idx, a in enumerate(slides_aba):
-        s = novo_slide()
-        cabecalho(s, f"Aba: {a.get('nome','')}")
-        cab = a.get("cabecalhos", [])
-        amostra = a.get("amostra", [])
-        y = 1.3
-        if cab:
-            texto(s, 0.4, y, 12.5, 0.4, "Conteúdo/cabeçalhos:", size=13, bold=True, cor=VERDE_P)
-            y += 0.35
-            for c in cab[:4]:
-                texto(s, 0.6, y, 12.4, 0.35, "  " + " | ".join(str(x) for x in c)[:140], size=11, cor=CINZA_P)
-                y += 0.32
-        if amostra:
-            texto(s, 0.4, y, 12.5, 0.4, "Dados:", size=13, bold=True, cor=VERDE_P)
-            y += 0.35
-            for c in amostra[:6]:
-                texto(s, 0.6, y, 12.4, 0.32, "  " + " | ".join(str(x) for x in c)[:140], size=10, cor=CINZA_P)
-                y += 0.30
-
     # Slide final: análise da IA
     if resultado.get("narrativa_ia"):
         s = novo_slide()
@@ -818,14 +796,6 @@ def gerar_word_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
                     rr.font.size = Pt(9)
                     if i == 0:
                         rr.bold = True
-
-    # Detalhe de cada aba
-    for a in info.get("abas", []):
-        doc.add_heading(f"Aba: {a.get('nome','')}", level=2)
-        for c in a.get("cabecalhos", [])[:5]:
-            doc.add_paragraph(" | ".join(str(x) for x in c))
-        for c in a.get("amostra", [])[:8]:
-            doc.add_paragraph("   " + " | ".join(str(x) for x in c))
 
     if resultado.get("narrativa_ia"):
         doc.add_heading("Análise da IA", level=1)
@@ -873,11 +843,6 @@ def gerar_pdf_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
     elementos.append(tbl)
     elementos.append(Spacer(1, 8))
 
-    for a in info.get("abas", []):
-        elementos.append(Paragraph(f"Aba: {a.get('nome','')}", h2))
-        for c in a.get("amostra", [])[:6]:
-            elementos.append(Paragraph(" | ".join(str(x) for x in c)[:120], corpo))
-
     if resultado.get("narrativa_ia"):
         elementos.append(Paragraph("Análise da IA", h2))
         _adicionar_blocos_pdf(elementos, mdu.parse_blocks(resultado["narrativa_ia"]), corpo, h2)
@@ -901,14 +866,6 @@ def gerar_xlsx_processado(resultado: dict, info: dict = None) -> io.BytesIO:
         ws.append([a.get("nome",""), a.get("linhas_lidas",0), a.get("colunas_max",0)])
 
     # aba por aba com amostra
-    for a in info.get("abas", []):
-        nome_aba = str(a.get("nome",""))[:28] or "Aba"
-        ws_aba = wb.create_sheet(title=nome_aba)
-        for c in a.get("cabecalhos", []):
-            ws_aba.append([str(x) for x in c])
-        for c in a.get("amostra", []):
-            ws_aba.append([str(x) for x in c])
-
     if resultado.get("narrativa_ia"):
         ws_ia = wb.create_sheet(title="Analise IA")
         ws_ia.append(["Seção", "Conteúdo"])
