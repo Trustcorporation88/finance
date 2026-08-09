@@ -222,6 +222,17 @@
         <label>Abas encontradas — clique para analisar uma específica:</label>
         <div class="tabs" id="listaAbas"></div>
       </div>
+      <div style="margin-top:14px; border-top:1px solid var(--borda); padding-top:12px;">
+        <label>💬 O que você quer saber? (clique numa pergunta pronta ou digite no chat)</label>
+        <div class="tabs" id="perguntasRapidas">
+          <button class="tab" onclick="usarPergunta('faça uma análise geral completa da planilha')">📚 Estudo completo</button>
+          <button class="tab" onclick="usarPergunta('qual o caixa de cada cenário?')">💰 Caixa por cenário</button>
+          <button class="tab" onclick="usarPergunta('qual a margem e o lucro de cada cenário?')">📈 Margem / lucro</button>
+          <button class="tab" onclick="usarPergunta('quais os principais riscos e pontos de atenção?')">⚠️ Riscos</button>
+          <button class="tab" onclick="usarPergunta('onde posso cortar gastos?')">✂️ Onde cortar</button>
+          <button class="tab" onclick="usarPergunta('qual a projeção do caixa para os próximos meses?')">📊 Projeção</button>
+        </div>
+      </div>
       <div class="btn-row">
         <button class="btn" id="btnAnalisar">🔍 Analisar caixa</button>
         <button class="btn verde hidden" id="btnPrever">📈 Prever próximos 3 meses</button>
@@ -532,6 +543,15 @@ function avisarArquivoCarregado() {
   chatAdd('ia', `✅ Recebi "${nome}". Clique em **Analisar caixa** para eu processar.`);
 }
 
+// ---------- perguntas rápidas ----------
+let intencaoUsuario = "";
+
+function usarPergunta(pergunta) {
+  intencaoUsuario = pergunta;
+  chatAdd('voce', pergunta);
+  chatAdd('ia', `✅ Entendido: vou responder sobre "${pergunta.toLowerCase().replace('faça uma análise geral completa da planilha', 'estudo completo da planilha')}". Agora suba o arquivo e clique em **Analisar caixa**.`);
+}
+
 // ---------- chat ----------
 function chatAdd(quem, texto) {
   const box = document.getElementById('chatMsg');
@@ -592,10 +612,9 @@ btn.addEventListener('click', async () => {
   const fd = new FormData();
   if (arquivoBytes) fd.append('arquivo', new Blob([arquivoBytes]), arquivoNome);
   if (textoEl.value.trim()) fd.append('texto', textoEl.value.trim());
-  if (historicoChat.length) {
-    const intencoes = historicoChat.filter(m => m.role === 'user').map(m => m.content).join(' | ');
-    fd.append('intencao', intencoes.slice(0, 500));
-  }
+  // usa a pergunta clicada (perguntas rápidas) como intenção principal
+  const intencao = intencaoUsuario || (historicoChat.filter(m => m.role === 'user').map(m => m.content).join(' | '));
+  if (intencao) fd.append('intencao', intencao.slice(0, 500));
   btn.disabled = true; showLoading('Analisando sua planilha...');
   try {
     const resp = await fetch('/analisar', { method: 'POST', body: fd });
