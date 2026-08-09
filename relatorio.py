@@ -651,20 +651,34 @@ def _adicionar_blocos_pptx(slide, md, size=14, continuar=None):
         r.font.color.rgb = cor
         return p
 
-    MAX_PAR = 18  # parágrafos por slide (cabem ~15-20 com word-wrap)
+    MAX_CHARS = 2000  # caracteres por slide (cabem ~25 linhas × 80 chars a 14pt)
     cur_slide = slide
     cur_tf = criar_tb(cur_slide)
-    par_count = 0
+    char_count = 0
 
     for b in blocos:
         tipo = b["tipo"]
-        inc = 1  # quantos parágrafos este bloco vai ocupar
+        # estima quantos chars este bloco vai ocupar
+        if tipo in ("h1", "h2", "h3", "h4"):
+            bloco_chars = len(b["texto"]) + 20
+        elif tipo == "p":
+            bloco_chars = len(b["texto"]) + 10
+        elif tipo in ("ul", "ol"):
+            bloco_chars = sum(len(it) + 10 for it in b["itens"])
+        elif tipo == "table":
+            bloco_chars = sum(len("  ".join(str(c)[:22] for c in linha)) + 10 for linha in b["linhas"])
+        elif tipo == "blockquote":
+            bloco_chars = len(b["texto"]) + 10
+        elif tipo == "hr":
+            bloco_chars = 10
+        else:
+            bloco_chars = 30
 
-        if par_count >= MAX_PAR:
+        if char_count + bloco_chars > MAX_CHARS and char_count > 0:
             if continuar:
                 cur_slide = continuar()
                 cur_tf = criar_tb(cur_slide)
-                par_count = 0
+                char_count = 0
             else:
                 break
 
@@ -676,26 +690,13 @@ def _adicionar_blocos_pptx(slide, md, size=14, continuar=None):
             add_p(cur_tf, b["texto"], sz=size + 4, bold=True, cor=AZUL_P, espaco_antes=8, espaco_depois=4)
         elif tipo in ("ul", "ol"):
             for item in b["itens"]:
-                if par_count >= MAX_PAR and continuar:
-                    if continuar:
-                        cur_slide = continuar()
-                        cur_tf = criar_tb(cur_slide)
-                        par_count = 0
                 add_p(cur_tf, "  " + item, sz=size, cor=CINZA_P, espaco_antes=0, espaco_depois=2)
-                par_count += 1
-                inc -= 1  # já contamos no loop interno
         elif tipo == "blockquote":
             add_p(cur_tf, b["texto"], sz=size, bold=True, cor=AMARELO_P, espaco_antes=4, espaco_depois=4)
         elif tipo == "table":
             for linha in b["linhas"]:
-                if par_count >= MAX_PAR and continuar:
-                    cur_slide = continuar()
-                    cur_tf = criar_tb(cur_slide)
-                    par_count = 0
                 add_p(cur_tf, "  ".join(str(c)[:22] for c in linha), sz=size - 2, cor=CINZA_P, espaco_antes=1, espaco_depois=1)
-                par_count += 1
-                inc -= 1
-        par_count += inc
+        char_count += bloco_chars
 
 
 def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
