@@ -12,6 +12,8 @@ import base64
 
 import os
 
+import markdown_utils as mdu
+
 # Marca TRUST
 LOGO_TRUST = os.path.join(os.path.dirname(__file__), "static", "logo-trust.png")
 MARCA = "TRUST CORPORATION · CFO de Bolso"
@@ -116,7 +118,7 @@ def gerar_word(resultado: dict, graf: dict) -> io.BytesIO:
 
     if resultado.get("narrativa_ia"):
         doc.add_heading("Análise da IA (DeepSeek)", level=1)
-        doc.add_paragraph(resultado["narrativa_ia"])
+        _adicionar_blocos_word(doc, mdu.parse_blocks(resultado["narrativa_ia"]))
     elif resultado.get("erro_ia"):
         doc.add_heading("IA indisponível", level=1)
         p = doc.add_paragraph()
@@ -147,6 +149,49 @@ def _estilizar_tabela_docx(t):
                     r.font.size = Pt(10)
                     if i == 0:
                         r.bold = True
+
+
+def _adicionar_runs_docx(p, texto_marcado):
+    """Adiciona runs com negrito/itálico num parágrafo docx."""
+    for txt, bold, italic in mdu.runs_do_texto(texto_marcado):
+        r = p.add_run(txt)
+        r.bold = bold
+        r.italic = italic
+        r.font.size = Pt(11)
+
+
+def _adicionar_blocos_word(doc, blocos):
+    """Renderiza blocos de markdown num documento Word."""
+    for b in blocos:
+        tipo = b["tipo"]
+        if tipo == "hr":
+            doc.add_paragraph("─" * 50)
+        elif tipo == "p":
+            p = doc.add_paragraph()
+            _adicionar_runs_docx(p, b["texto"])
+        elif tipo in ("h1", "h2", "h3", "h4"):
+            nivel = int(tipo[1]) - 1
+            doc.add_heading(b["texto"], level=nivel)
+        elif tipo in ("ul", "ol"):
+            for item in b["itens"]:
+                p = doc.add_paragraph(style="List Bullet" if tipo == "ul" else "List Number")
+                _adicionar_runs_docx(p, item)
+        elif tipo == "blockquote":
+            p = doc.add_paragraph()
+            _adicionar_runs_docx(p, b["texto"])
+            for pr in p.runs:
+                pr.italic = True
+                pr.font.color.rgb = CINZA
+        elif tipo == "table":
+            linhas = b["linhas"]
+            t = doc.add_table(rows=len(linhas), cols=len(linhas[0]))
+            t.style = "Light Grid Accent 1"
+            for i, linha in enumerate(linhas):
+                for j, cel in enumerate(linha):
+                    if j < len(linhas[0]):
+                        t.cell(i, j).text = cel
+            _estilizar_tabela_docx(t)
+            doc.add_paragraph()
 
 
 AMARELO_RL = HexColor("#F39C12")
@@ -236,9 +281,7 @@ def gerar_pdf(resultado: dict, graf: dict) -> io.BytesIO:
 
     if resultado.get("narrativa_ia"):
         elementos.append(Paragraph("Análise da IA (DeepSeek)", h2))
-        for bloco in resultado["narrativa_ia"].split("\n\n"):
-            elementos.append(Paragraph(bloco.replace("\n", "<br/>"), corpo))
-            elementos.append(Spacer(1, 4))
+        _adicionar_blocos_pdf(elementos, mdu.parse_blocks(resultado["narrativa_ia"]), corpo, h2)
 
     elementos.append(Spacer(1, 12))
     elementos.append(Paragraph("Lembrete: é gestão de caixa gerencial. Para imposto/nota fiscal, fale com seu contador.", nota))
@@ -249,9 +292,52 @@ def gerar_pdf(resultado: dict, graf: dict) -> io.BytesIO:
     return buf
 
 
-
-
-def _rodape_word(doc):
+def _adicionar_blocos_pdf(elementos, blocos, corpo, h2):
+    """Renderiza blocos de markdown em elementos do PDF (reportlab platypus)."""
+    for b in blocos:
+        tipo = b["tipo"]
+        if tipo == "hr":
+            from reportlab.platypus import HRFlowable
+            elementos.append(HRFlowable(width="100%", thickness=0.7, color=HexColor("#BBBBBB")))
+            elementos.append(Spacer(1, 4))
+        elif tipo == "p":
+            texto = mdu.runs_para_reportlab(b["texto"])
+            elementos.append(Paragraph(texto, corpo))
+            elementos.append(Spacer(1, 4))
+        elif tipo in ("h1", "h2", "h3", "h4"):
+            st = ParagraphStyle(
+                f"HIA{tipo}", parent=h2,
+                fontSize=max(9, 15 - 1.6 * int(tipo[1])),
+                spaceBefore=8, spaceAfter=3,
+            )
+            elementos.append(Paragraph(mdu.runs_para_reportlab(b["texto"]), st))
+        elif tipo in ("ul", "ol"):
+            for item in b["itens"]:
+                marc = "• " if tipo == "ul" else "• "
+                elementos.append(Paragraph(marc + mdu.runs_para_reportlab(item), corpo))
+                elementos.append(Spacer(1, 2))
+        elif tipo == "blockquote":
+            st = ParagraphStyle("BQIA", parent=corpo, fontStyle="italic",
+                                textColor=HexColor("#555555"), leftIndent=12)
+            elementos.append(Paragraph(mdu.runs_para_reportlab(b["texto"]), st))
+            elementos.append(Spacer(1, 4))
+        elif tipo == "table":
+            linhas = b["linhas"]
+            ncol = max(len(r) for r in linhas)
+            linhas = [r + [""] * (ncol - len(r)) for r in linhas]
+            larg = 175 / ncol if ncol else 175
+            tbl = Table(linhas, colWidths=[larg * mm] * ncol)
+            tbl.setStyle(TableStyle([
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                ("GRID", (0, 0), (-1, -1), 0.4, HexColor("#CCCCCC")),
+                ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1F3B73")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#FFFFFF")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [HexColor("#FFFFFF"), HexColor("#F2F5F9")]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]))
+            elementos.append(tbl)
+            elementos.append(Spacer(1, 6))
     """Adiciona o rodapé com a marca TRUST no fim do documento."""
     try:
         doc.add_paragraph()
@@ -285,6 +371,19 @@ def estilos_titulo():
     e = getSampleStyleSheet()
     return ParagraphStyle("TituloTrust", parent=e["Title"], fontSize=18,
                           textColor=HexColor("#1F3B73"))
+
+
+def _rodape_word(doc):
+    """Adiciona o rodapé com a marca TRUST no fim do documento."""
+    try:
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        r = p.add_run(MARCA)
+        r.italic = True
+        r.font.size = Pt(8)
+        r.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+    except Exception:
+        pass
 
 
 def _rodape_pdf(elementos, texto="TRUST CORPORATION"):
@@ -468,7 +567,7 @@ def gerar_pptx(resultado: dict, graf: dict) -> io.BytesIO:
     if resultado.get("narrativa_ia"):
         s = novo_slide()
         cabecalho(s, "Análise da IA (DeepSeek)")
-        texto(s, 0.6, 1.3, 12.2, 5.8, resultado["narrativa_ia"], size=14)
+        _adicionar_blocos_pptx(s, resultado["narrativa_ia"])
 
     buf = io.BytesIO()
     prs.save(buf)
@@ -498,8 +597,51 @@ def _abas_para_linhas(info):
     return linhas
 
 
+def _adicionar_blocos_pptx(slide, md, size=14):
+    """Renderiza blocos de markdown num slide do PPTX (texto simples formatado)."""
+    def caixa_txt(l, t, w, h, conteudo, sz=size, bold=False, cor=CINZA_P):
+        tb = slide.shapes.add_textbox(PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(h))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        r = p.add_run()
+        r.text = conteudo
+        r.font.size = PptxPt(sz)
+        r.font.bold = bold
+        r.font.color.rgb = cor
+        return tb
+
+    blocos = mdu.parse_blocks(md)
+    y = 1.3
+    for b in blocos:
+        tipo = b["tipo"]
+        if tipo in ("h1", "h2", "h3", "h4"):
+            caixa_txt(0.6, y, 12.2, 0.5, b["texto"], sz=size + 4, bold=True, cor=AZUL_P)
+            y += 0.5
+        elif tipo == "p":
+            caixa_txt(0.6, y, 12.2, 0.6, b["texto"], sz=size, cor=CINZA_P)
+            y += 0.45
+        elif tipo in ("ul", "ol"):
+            for item in b["itens"]:
+                caixa_txt(0.8, y, 11.8, 0.5, "•  " + item, sz=size, cor=CINZA_P)
+                y += 0.4
+        elif tipo == "blockquote":
+            caixa_txt(0.8, y, 11.8, 0.5, "▸  " + b["texto"], sz=size, bold=True, cor=AMARELO_P)
+            y += 0.4
+        elif tipo == "table":
+            linhas = b["linhas"]
+            ncol = max(len(r) for r in linhas)
+            linhas = [r + [""] * (ncol - len(r)) for r in linhas]
+            # quebra a tabela em várias linhas de texto para não estourar o slide
+            for linha in linhas:
+                caixa_txt(0.6, y, 12.2, 0.4, "  ".join(str(c)[:22] for c in linha), sz=size - 2, cor=CINZA_P)
+                y += 0.35
+        y += 0.08
+        if y > 6.9:
+            break
+
+
 def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
-    """Gera uma apresentação resumindo todas as abas de uma planilha completa."""
     if not PPTX_DISPONIVEL:
         raise RuntimeError("python-pptx não instalado no servidor.")
     info = info or resultado.get("planilha_info", {})
@@ -615,7 +757,7 @@ def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
     if resultado.get("narrativa_ia"):
         s = novo_slide()
         cabecalho(s, "Análise da IA")
-        texto(s, 0.6, 1.3, 12.2, 5.8, resultado["narrativa_ia"], size=14)
+        _adicionar_blocos_pptx(s, resultado["narrativa_ia"])
 
     buf = io.BytesIO()
     prs.save(buf)
@@ -665,7 +807,7 @@ def gerar_word_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
 
     if resultado.get("narrativa_ia"):
         doc.add_heading("Análise da IA", level=1)
-        doc.add_paragraph(resultado["narrativa_ia"])
+        _adicionar_blocos_word(doc, mdu.parse_blocks(resultado["narrativa_ia"]))
 
     buf = io.BytesIO()
     # rodapé da marca
@@ -716,8 +858,7 @@ def gerar_pdf_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
 
     if resultado.get("narrativa_ia"):
         elementos.append(Paragraph("Análise da IA", h2))
-        for bloco in resultado["narrativa_ia"].split("\n\n"):
-            elementos.append(Paragraph(bloco.replace("\n", "<br/>"), corpo))
+        _adicionar_blocos_pdf(elementos, mdu.parse_blocks(resultado["narrativa_ia"]), corpo, h2)
 
     _rodape_pdf(elementos, "TRUST CORPORATION")
     doc.build(elementos)
@@ -748,8 +889,21 @@ def gerar_xlsx_processado(resultado: dict, info: dict = None) -> io.BytesIO:
 
     if resultado.get("narrativa_ia"):
         ws_ia = wb.create_sheet(title="Analise IA")
-        for linha in resultado["narrativa_ia"].split("\n"):
-            ws_ia.append([linha])
+        ws_ia.append(["Seção", "Conteúdo"])
+        for b in mdu.parse_blocks(resultado["narrativa_ia"]):
+            tipo = b["tipo"]
+            if tipo in ("h1", "h2", "h3", "h4"):
+                ws_ia.append([b["texto"], ""])
+            elif tipo == "p":
+                ws_ia.append(["", b["texto"]])
+            elif tipo in ("ul", "ol"):
+                for item in b["itens"]:
+                    ws_ia.append(["• item", item])
+            elif tipo == "blockquote":
+                ws_ia.append(["destaque", b["texto"]])
+            elif tipo == "table":
+                for linha in b["linhas"]:
+                    ws_ia.append(["", " | ".join(str(c) for c in linha)])
 
     buf = io.BytesIO()
     wb.save(buf)
