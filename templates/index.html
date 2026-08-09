@@ -104,14 +104,27 @@
   body.dark .alerta { background: #2b2613; }
   .alerta.alto { border-color: var(--vermelho); background: #fdeceb; }
   body.dark .alerta.alto { background: #2b1716; }
-  .ia { background: #f2f7f2; border: 1px solid #cfe3d3; border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+  .ia { background: #f2f7f2; border: 1px solid #cfe3d3; border-radius: 12px; padding: 16px; font-size: 14px; line-height: 1.7; }
   body.dark .ia { background: #182418; border-color: #2e4d2e; }
+  .ia h2, .ia h3, .ia h4 { margin: 14px 0 6px; color: var(--azul); font-family: 'Sora', sans-serif; }
+  .ia h2 { font-size: 17px; } .ia h3 { font-size: 15px; } .ia h4 { font-size: 13px; }
+  .ia p { margin: 6px 0; }
+  .ia ul, .ia ol { margin: 6px 0 6px 20px; }
+  .ia li { margin: 3px 0; }
+  .ia table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 10px 0; }
+  .ia table th { background: var(--grad); color: #fff; padding: 7px 9px; text-align: left; }
+  .ia table td { padding: 6px 9px; border-bottom: 1px solid var(--borda); }
+  .ia table tr:nth-child(even) td { background: var(--chat-bg); }
+  .ia strong { color: var(--texto); }
+  .ia code { background: var(--chat-bg); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+  .ia blockquote { border-left: 3px solid var(--azul3); margin: 8px 0; padding: 4px 12px; color: var(--muted); }
+  .ia hr { border: none; border-top: 1px solid var(--borda); margin: 12px 0; }
   .hidden { display: none; }
   .nota-ia { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .chatMsg { max-height: 240px; overflow-y: auto; margin-bottom: 10px; font-size: 13px; background: var(--surface); border: 1px solid var(--borda); border-radius: 12px; padding: 10px; }
   .chatMsg .msg { margin: 6px 0; padding: 9px 12px; border-radius: 12px; white-space: pre-wrap; animation: fadeUp .3s ease; }
   .chatMsg .msg.voce { background: var(--chat-bg); text-align: right; border-top-right-radius: 3px; }
-  .chatMsg .msg.ia { background: var(--surface); border: 1px solid var(--borda); border-top-left-radius: 3px; }
+  .chatMsg .msg.ia { background: var(--surface); border: 1px solid var(--borda); border-top-left-radius: 3px; white-space: normal; overflow-x: auto; }
   .chatMsg .msg.digitando::after { content: "▋"; animation: pulse-glow 1s infinite; }
   .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
   .tab { padding: 7px 14px; border: 1px solid var(--borda); border-radius: 24px; font-size: 12px; font-weight: 600; cursor: pointer; background: var(--surface); color: var(--texto); transition: all .2s; }
@@ -592,7 +605,7 @@ function chatAdd(quem, texto) {
   const box = document.getElementById('chatMsg');
   const div = document.createElement('div');
   div.className = 'msg ' + quem;
-  div.innerHTML = (quem === 'voce' ? '<b>Você:</b> ' : '<b>IA:</b> ') + esc(texto);
+  div.innerHTML = (quem === 'voce' ? '<b>Você:</b> ' : '<b>IA:</b> ') + (quem === 'ia' ? mdToHtml(texto) : esc(texto));
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
   historicoChat.push({ role: quem === 'voce' ? 'user' : 'assistant', content: texto });
@@ -718,7 +731,7 @@ function render(r, g) {
     for (const d of r.divergencias) html += `<div class="alerta ${d.nivel}"><b>[${d.nivel.toUpperCase()}] ${esc(d.titulo)}</b><br>${esc(d.detalhe)}</div>`;
     html += '</div></details>';
   }
-  if (r.narrativa_ia) html += '<details class="secao-colaps" open><summary>🧠 Análise da IA</summary><div class="corpo"><div class="ia">' + esc(r.narrativa_ia) + '</div></div></details>';
+  if (r.narrativa_ia) html += '<details class="secao-colaps" open><summary>🧠 Análise da IA</summary><div class="corpo"><div class="ia">' + mdToHtml(r.narrativa_ia) + '</div></div></details>';
 
   html += '<div class="btn-row" style="margin-top:18px">';
   html += '<button class="btn verde" onclick="baixar(\'word\')">📄 Word</button>';
@@ -736,7 +749,7 @@ function renderEspecial(r, g) {
   let html = '';
   if (r.tipo_analise === 'comparacao') {
     html += '<h4>≠ Comparação de planilhas</h4>';
-    if (r.narrativa_ia) html += '<div class="ia">' + esc(r.narrativa_ia) + '</div>';
+    if (r.narrativa_ia) html += '<div class="ia">' + mdToHtml(r.narrativa_ia) + '</div>';
   } else {
     const abas = (r.planilha_info?.abas || []);
     if (abas.length > 1 && !r.aba_analisada) {
@@ -747,7 +760,7 @@ function renderEspecial(r, g) {
       }
       html += '</div>';
     }
-    if (r.narrativa_ia) html += '<h4>🧠 Análise da IA</h4><div class="ia">' + esc(r.narrativa_ia) + '</div>';
+    if (r.narrativa_ia) html += '<h4>🧠 Análise da IA</h4><div class="ia">' + mdToHtml(r.narrativa_ia) + '</div>';
   }
   html += '<div class="btn-row" style="margin-top:18px">';
   html += '<button class="btn verde" onclick="baixarPlanilha(\'pptx\')">📊 PPTX</button>';
@@ -943,6 +956,84 @@ function fmtR(v) {
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Converte markdown simples em HTML (para a resposta da IA ficar legível)
+function mdToHtml(md) {
+  if (!md) return '';
+  let html = '';
+  const linhas = String(md).split('\n');
+  let emLista = null; // 'ul' ou 'ol' ou null
+  let emTabela = null;
+  const fecharLista = () => {
+    if (emLista) { html += '</' + emLista + '>'; emLista = null; }
+  };
+  const fecharTabela = () => {
+    if (emTabela) { html += '</table>'; emTabela = null; }
+  };
+  for (let i = 0; i < linhas.length; i++) {
+    const ln = linhas[i].trimEnd();
+    if (!ln.trim()) { fecharLista(); fecharTabela(); continue; }
+    // título
+    let m = ln.match(/^(#{1,4})\s+(.+)$/);
+    if (m) {
+      fecharLista(); fecharTabela();
+      const nivel = m[1].length;
+      html += `<h${nivel + 1}>` + inline(m[2]) + `</h${nivel + 1}>`;
+      continue;
+    }
+    // linha de separação de tabela (|---|)
+    if (/^\s*\|?[\s:|-]+\|?\s*$/.test(ln) && linhas[i+1] && linhas[i+1].includes('|')) {
+      continue; // pulo o separador
+    }
+    // tabela (linha com |)
+    if (ln.includes('|')) {
+      if (!emTabela) {
+        emTabela = true;
+        html += '<table>';
+      }
+      const cells = ln.split('|').map(c => c.trim()).filter(c => c !== '');
+      html += '<tr>' + cells.map(c => '<td>' + inline(c) + '</td>').join('') + '</tr>';
+      continue;
+    } else {
+      fecharTabela();
+    }
+    // lista
+    m = ln.match(/^(\s*)([-*+]|\d+\.)\s+(.+)$/);
+    if (m) {
+      const tipo = (m[2] === '-' || m[2] === '*' || m[2] === '+') ? 'ul' : 'ol';
+      if (emLista !== tipo) {
+        fecharLista();
+        emLista = tipo;
+        html += '<' + tipo + '>';
+      }
+      html += '<li>' + inline(m[3]) + '</li>';
+      continue;
+    }
+    fecharLista();
+    // blockquote
+    m = ln.match(/^>\s?(.*)$/);
+    if (m) {
+      html += '<blockquote>' + inline(m[1]) + '</blockquote>';
+      continue;
+    }
+    // hr
+    if (/^---+$/.test(ln.trim())) {
+      html += '<hr>';
+      continue;
+    }
+    // parágrafo
+    html += '<p>' + inline(ln) + '</p>';
+  }
+  fecharLista(); fecharTabela();
+  return html;
+}
+function inline(t) {
+  let s = esc(t);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');   // negrito
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');               // itálico
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');           // código
+  return s;
 }
 
 renderHistorico();
