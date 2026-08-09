@@ -624,68 +624,78 @@ def _abas_para_linhas(info):
 
 
 def _adicionar_blocos_pptx(slide, md, size=14, continuar=None):
-    """Renderiza blocos de markdown em um ou mais slides do PPTX.
-    Se continuar for uma função que retorna um novo slide (já com cabeçalho),
-    o conteúdo que não couber será distribuído em slides extras."""
-    def caixa_txt(l, t, w, h, conteudo, sz=size, bold=False, cor=CINZA_P):
-        nonlocal slide
-        tb = slide.shapes.add_textbox(PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(h))
+    """Renderiza blocos de markdown em um ou mais slides do PPTX,
+    usando uma única caixa de texto por slide com parágrafos.
+    Cria slides extras automaticamente quando o conteúdo é longo."""
+    blocos = mdu.parse_blocks(md)
+    if not blocos:
+        return
+
+    def criar_tb(sld, y0=1.3):
+        tb = sld.shapes.add_textbox(
+            PptxInches(0.6), PptxInches(y0),
+            PptxInches(12.2), PptxInches(6.0)
+        )
         tf = tb.text_frame
         tf.word_wrap = True
-        p = tf.paragraphs[0]
+        return tf
+
+    def add_p(tf, texto, sz=size, bold=False, cor=CINZA_P, espaco_antes=0, espaco_depois=4):
+        p = tf.paragraphs[0] if len(tf.paragraphs) == 1 and tf.paragraphs[0].text == '' else tf.add_paragraph()
+        p.space_before = PptxPt(espaco_antes)
+        p.space_after = PptxPt(espaco_depois)
         r = p.add_run()
-        r.text = _limpar_marcadores(conteudo)
+        r.text = _limpar_marcadores(texto)
         r.font.size = PptxPt(sz)
         r.font.bold = bold
         r.font.color.rgb = cor
-        return tb
+        return p
 
-    def novo_slide_se_preciso():
-        nonlocal slide
-        if continuar:
-            slide = continuar()
-            return 1.3
-        return None
+    MAX_PAR = 18  # parágrafos por slide (cabem ~15-20 com word-wrap)
+    cur_slide = slide
+    cur_tf = criar_tb(cur_slide)
+    par_count = 0
 
-    blocos = mdu.parse_blocks(md)
-    y = 1.3
     for b in blocos:
-        if y > 6.9:
-            nova_y = novo_slide_se_preciso()
-            if nova_y is None:
-                break
-            y = nova_y
         tipo = b["tipo"]
-        if tipo in ("h1", "h2", "h3", "h4"):
-            caixa_txt(0.6, y, 12.2, 0.5, b["texto"], sz=size + 4, bold=True, cor=AZUL_P)
-            y += 0.5
+        inc = 1  # quantos parágrafos este bloco vai ocupar
+
+        if par_count >= MAX_PAR:
+            if continuar:
+                cur_slide = continuar()
+                cur_tf = criar_tb(cur_slide)
+                par_count = 0
+            else:
+                break
+
+        if tipo == "hr":
+            add_p(cur_tf, "─" * 60, sz=8, cor=CINZA_P)
         elif tipo == "p":
-            linhas_estimadas = max(1, len(b["texto"]) // 90 + 1)
-            alt = max(0.35, 0.3 * linhas_estimadas)
-            caixa_txt(0.6, y, 12.2, alt, b["texto"], sz=size, cor=CINZA_P)
-            y += alt + 0.08
+            add_p(cur_tf, b["texto"], sz=size, cor=CINZA_P)
+        elif tipo in ("h1", "h2", "h3", "h4"):
+            add_p(cur_tf, b["texto"], sz=size + 4, bold=True, cor=AZUL_P, espaco_antes=8, espaco_depois=4)
         elif tipo in ("ul", "ol"):
             for item in b["itens"]:
-                if y > 6.9:
-                    nova_y = novo_slide_se_preciso()
-                    if nova_y is None:
-                        break
-                    y = nova_y
-                caixa_txt(0.8, y, 11.8, 0.5, "•  " + item, sz=size, cor=CINZA_P)
-                y += 0.4
+                if par_count >= MAX_PAR and continuar:
+                    if continuar:
+                        cur_slide = continuar()
+                        cur_tf = criar_tb(cur_slide)
+                        par_count = 0
+                add_p(cur_tf, "  " + item, sz=size, cor=CINZA_P, espaco_antes=0, espaco_depois=2)
+                par_count += 1
+                inc -= 1  # já contamos no loop interno
         elif tipo == "blockquote":
-            caixa_txt(0.8, y, 11.8, 0.5, "▸  " + b["texto"], sz=size, bold=True, cor=AMARELO_P)
-            y += 0.4
+            add_p(cur_tf, b["texto"], sz=size, bold=True, cor=AMARELO_P, espaco_antes=4, espaco_depois=4)
         elif tipo == "table":
             for linha in b["linhas"]:
-                if y > 6.9:
-                    nova_y = novo_slide_se_preciso()
-                    if nova_y is None:
-                        break
-                    y = nova_y
-                caixa_txt(0.6, y, 12.2, 0.4, "  ".join(str(c)[:22] for c in linha), sz=size - 2, cor=CINZA_P)
-                y += 0.35
-        y += 0.08
+                if par_count >= MAX_PAR and continuar:
+                    cur_slide = continuar()
+                    cur_tf = criar_tb(cur_slide)
+                    par_count = 0
+                add_p(cur_tf, "  ".join(str(c)[:22] for c in linha), sz=size - 2, cor=CINZA_P, espaco_antes=1, espaco_depois=1)
+                par_count += 1
+                inc -= 1
+        par_count += inc
 
 
 def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
