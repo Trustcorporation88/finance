@@ -207,7 +207,7 @@
   <div class="card">
     <h2>1. Mande seus dados</h2>
     <div class="btn-row" style="margin-bottom:10px">
-      <button class="btn verde" onclick="mostrarModo('simples')" id="btnModoSimples" style="margin-top:0; padding:8px 14px; font-size:13px;">Analisar caixa</button>
+      <button class="btn verde" onclick="mostrarModo('simples')" id="btnModoSimples" style="margin-top:0; padding:8px 14px; font-size:13px;">Analisar planilha</button>
       <button class="btn" onclick="mostrarModo('comparar')" id="btnModoComparar" style="margin-top:0; padding:8px 14px; font-size:13px;">Comparar 2 planilhas</button>
       <button class="btn" onclick="mostrarModo('orcado')" id="btnModoOrcado" style="margin-top:0; padding:8px 14px; font-size:13px;">Orçado × Realizado</button>
     </div>
@@ -217,6 +217,7 @@
       <div class="upload-box" id="drop">Arraste aqui ou clique para selecionar<br><small>Valores positivos = entradas · negativos = saídas</small></div>
       <input type="file" id="arquivo" class="hidden" accept=".csv,.xlsx,.xls,.txt,.ofx,.qif">
       <label>Ou cole os dados em texto <small>(formato: data;descrição;valor)</small></label>
+      <div class="nota-ia" style="margin-bottom:6px;">📌 A análise lê a planilha inteira (todas as abas). Escolha uma pergunta acima ou clique em Analisar planilha.</div>
       <textarea id="texto" placeholder="ex.: 05/01/2026;Venda cliente A;3500&#10;08/01/2026;Aluguel;-2500"></textarea>
       <div id="seletorAbas" class="hidden" style="margin-top:10px">
         <label>Abas encontradas — clique para analisar uma específica:</label>
@@ -234,7 +235,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn" id="btnAnalisar">🔍 Analisar caixa</button>
+        <button class="btn" id="btnAnalisar">🔍 Analisar planilha</button>
         <button class="btn verde hidden" id="btnPrever">📈 Prever próximos 3 meses</button>
         <button class="btn amarelo hidden" id="btnAlerta" onclick="verAlertaCaixa()" style="background:var(--amarelo)">⚠️ Saúde do caixa</button>
       </div>
@@ -540,7 +541,7 @@ function temArquivoCarregado() {
 function avisarArquivoCarregado() {
   const nome = arquivoNome || (textoEl.value.trim() ? 'dados colados' : '');
   if (!nome) return;
-  chatAdd('ia', `✅ Recebi "${nome}". Clique em **Analisar caixa** para eu processar.`);
+  chatAdd('ia', `✅ Recebi "${nome}". Clique em **Analisar planilha** (ou numa pergunta pronta) para eu processar.`);
 }
 
 // ---------- perguntas rápidas ----------
@@ -549,7 +550,41 @@ let intencaoUsuario = "";
 function usarPergunta(pergunta) {
   intencaoUsuario = pergunta;
   chatAdd('voce', pergunta);
-  chatAdd('ia', `✅ Entendido: vou responder sobre "${pergunta.toLowerCase().replace('faça uma análise geral completa da planilha', 'estudo completo da planilha')}". Agora suba o arquivo e clique em **Analisar caixa**.`);
+  if (!temArquivoCarregado()) {
+    chatAdd('ia', '✅ Entendido! Agora suba o arquivo e a análise vai rodar automaticamente com essa pergunta.');
+    return;
+  }
+  chatAdd('ia', '✅ Pergunta definida. Analisando sua planilha automaticamente...');
+  executarAnalise();
+}
+
+// análise automática (usada pelo botão e pelas perguntas rápidas)
+async function executarAnalise() {
+  if (!arquivoBytes && !textoEl.value.trim()) { mostrar('Escolha um arquivo ou cole os dados.', true); return; }
+  const fd = new FormData();
+  if (arquivoBytes) fd.append('arquivo', new Blob([arquivoBytes]), arquivoNome);
+  if (textoEl.value.trim()) fd.append('texto', textoEl.value.trim());
+  // usa a pergunta clicada (perguntas rápidas) como intenção principal
+  const intencao = intencaoUsuario || (historicoChat.filter(m => m.role === 'user').map(m => m.content).join(' | '));
+  if (intencao) fd.append('intencao', intencao.slice(0, 500));
+  btn.disabled = true; showLoading('Analisando sua planilha...');
+  try {
+    const resp = await fetch('/analisar', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) { hideLoading(); mostrar(data.erro || 'Erro na análise.', true); return; }
+    ultimoResultado = data.resultado;
+    ultimosGraficos = data.graficos;
+    hideLoading();
+    mostrar('');
+    render(data.resultado, data.graficos);
+    chatAdd('ia', '✅ Análise concluída! Pergunte qualquer coisa aqui, ou use os botões de download.');
+    salvarHistorico();
+  } catch (e) {
+    hideLoading();
+    mostrar('Erro de conexão: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ---------- chat ----------
@@ -572,7 +607,7 @@ async function perguntar() {
   chatAdd('voce', pergunta);
 
   if (!ultimoResultado && temArquivoCarregado()) {
-    chatAdd('ia', '📄 Vejo que você já carregou o arquivo. Clique em **Analisar caixa** para eu usar seus dados de verdade. Depois me pergunte de novo. 😉');
+    chatAdd('ia', '📄 Vejo que você já carregou o arquivo. Clique em **Analisar planilha** (ou numa pergunta pronta) para eu usar seus dados de verdade. 😉');
     return;
   }
 
@@ -607,32 +642,8 @@ async function perguntar() {
 }
 
 // ---------- análise ----------
-btn.addEventListener('click', async () => {
-  if (!arquivoBytes && !textoEl.value.trim()) { mostrar('Escolha um arquivo ou cole os dados.', true); return; }
-  const fd = new FormData();
-  if (arquivoBytes) fd.append('arquivo', new Blob([arquivoBytes]), arquivoNome);
-  if (textoEl.value.trim()) fd.append('texto', textoEl.value.trim());
-  // usa a pergunta clicada (perguntas rápidas) como intenção principal
-  const intencao = intencaoUsuario || (historicoChat.filter(m => m.role === 'user').map(m => m.content).join(' | '));
-  if (intencao) fd.append('intencao', intencao.slice(0, 500));
-  btn.disabled = true; showLoading('Analisando sua planilha...');
-  try {
-    const resp = await fetch('/analisar', { method: 'POST', body: fd });
-    const data = await resp.json();
-    if (!resp.ok) { hideLoading(); mostrar(data.erro || 'Erro na análise.', true); return; }
-    ultimoResultado = data.resultado;
-    ultimosGraficos = data.graficos;
-    hideLoading();
-    mostrar('');
-    render(data.resultado, data.graficos);
-    chatAdd('ia', '✅ Análise concluída! Pergunte qualquer coisa aqui, ou use os botões de download.');
-    salvarHistorico();
-  } catch (e) {
-    hideLoading();
-    mostrar('Erro de conexão: ' + e.message, true);
-  } finally {
-    btn.disabled = false;
-  }
+btn.addEventListener('click', () => {
+  executarAnalise();
 });
 
 function mostrar(msg, erro) {
