@@ -573,7 +573,7 @@ def ler_planilha_completa(arquivo: bytes, nome_arquivo: str = "") -> dict:
         for l in linhas[:5]:
             cabecalhos.append(l)
         # amostra de dados (linhas depois dos cabeçalhos)
-        amostra = linhas[5:15]
+        amostra = linhas[5:35]
         abas_info.append({
             "nome": sn,
             "linhas_lidas": len(linhas),
@@ -641,7 +641,7 @@ def ler_aba_especifica(arquivo: bytes, nome_arquivo: str, aba_nome: str) -> dict
     wb.close()
 
     cabecalhos = linhas[:5]
-    amostra = linhas[5:15]
+    amostra = linhas[5:35]
 
     texto = f"ABA: {aba_nome} ({len(linhas)} linhas)\n"
     for l in linhas[:40]:
