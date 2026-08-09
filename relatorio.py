@@ -589,7 +589,11 @@ def gerar_pptx(resultado: dict, graf: dict) -> io.BytesIO:
     if resultado.get("narrativa_ia"):
         s = novo_slide()
         cabecalho(s, "Análise da IA (DeepSeek)")
-        _adicionar_blocos_pptx(s, resultado["narrativa_ia"])
+        def cont_slide():
+            ns = novo_slide()
+            cabecalho(ns, "Análise da IA (DeepSeek) - continuação")
+            return ns
+        _adicionar_blocos_pptx(s, resultado["narrativa_ia"], continuar=cont_slide)
 
     buf = io.BytesIO()
     prs.save(buf)
@@ -619,9 +623,12 @@ def _abas_para_linhas(info):
     return linhas
 
 
-def _adicionar_blocos_pptx(slide, md, size=14):
-    """Renderiza blocos de markdown num slide do PPTX (texto simples formatado)."""
+def _adicionar_blocos_pptx(slide, md, size=14, continuar=None):
+    """Renderiza blocos de markdown em um ou mais slides do PPTX.
+    Se continuar for uma função que retorna um novo slide (já com cabeçalho),
+    o conteúdo que não couber será distribuído em slides extras."""
     def caixa_txt(l, t, w, h, conteudo, sz=size, bold=False, cor=CINZA_P):
+        nonlocal slide
         tb = slide.shapes.add_textbox(PptxInches(l), PptxInches(t), PptxInches(w), PptxInches(h))
         tf = tb.text_frame
         tf.word_wrap = True
@@ -633,34 +640,52 @@ def _adicionar_blocos_pptx(slide, md, size=14):
         r.font.color.rgb = cor
         return tb
 
+    def novo_slide_se_preciso():
+        nonlocal slide
+        if continuar:
+            slide = continuar()
+            return 1.3
+        return None
+
     blocos = mdu.parse_blocks(md)
     y = 1.3
     for b in blocos:
+        if y > 6.9:
+            nova_y = novo_slide_se_preciso()
+            if nova_y is None:
+                break
+            y = nova_y
         tipo = b["tipo"]
         if tipo in ("h1", "h2", "h3", "h4"):
             caixa_txt(0.6, y, 12.2, 0.5, b["texto"], sz=size + 4, bold=True, cor=AZUL_P)
             y += 0.5
         elif tipo == "p":
-            caixa_txt(0.6, y, 12.2, 0.6, b["texto"], sz=size, cor=CINZA_P)
-            y += 0.45
+            linhas_estimadas = max(1, len(b["texto"]) // 90 + 1)
+            alt = max(0.35, 0.3 * linhas_estimadas)
+            caixa_txt(0.6, y, 12.2, alt, b["texto"], sz=size, cor=CINZA_P)
+            y += alt + 0.08
         elif tipo in ("ul", "ol"):
             for item in b["itens"]:
+                if y > 6.9:
+                    nova_y = novo_slide_se_preciso()
+                    if nova_y is None:
+                        break
+                    y = nova_y
                 caixa_txt(0.8, y, 11.8, 0.5, "•  " + item, sz=size, cor=CINZA_P)
                 y += 0.4
         elif tipo == "blockquote":
             caixa_txt(0.8, y, 11.8, 0.5, "▸  " + b["texto"], sz=size, bold=True, cor=AMARELO_P)
             y += 0.4
         elif tipo == "table":
-            linhas = b["linhas"]
-            ncol = max(len(r) for r in linhas)
-            linhas = [r + [""] * (ncol - len(r)) for r in linhas]
-            # quebra a tabela em várias linhas de texto para não estourar o slide
-            for linha in linhas:
+            for linha in b["linhas"]:
+                if y > 6.9:
+                    nova_y = novo_slide_se_preciso()
+                    if nova_y is None:
+                        break
+                    y = nova_y
                 caixa_txt(0.6, y, 12.2, 0.4, "  ".join(str(c)[:22] for c in linha), sz=size - 2, cor=CINZA_P)
                 y += 0.35
         y += 0.08
-        if y > 6.9:
-            break
 
 
 def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
@@ -757,7 +782,11 @@ def gerar_pptx_planilha(resultado: dict, info: dict = None) -> io.BytesIO:
     if resultado.get("narrativa_ia"):
         s = novo_slide()
         cabecalho(s, "Análise da IA")
-        _adicionar_blocos_pptx(s, resultado["narrativa_ia"])
+        def cont_slide():
+            ns = novo_slide()
+            cabecalho(ns, "Análise da IA - continuação")
+            return ns
+        _adicionar_blocos_pptx(s, resultado["narrativa_ia"], continuar=cont_slide)
 
     buf = io.BytesIO()
     prs.save(buf)
