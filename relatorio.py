@@ -694,8 +694,21 @@ def _adicionar_blocos_pptx(slide, md, size=14, continuar=None):
         elif tipo == "blockquote":
             add_p(cur_tf, b["texto"], sz=size, bold=True, cor=AMARELO_P, espaco_antes=4, espaco_depois=4)
         elif tipo == "table":
-            for linha in b["linhas"]:
-                add_p(cur_tf, "  ".join(str(c)[:22] for c in linha), sz=size - 2, cor=CINZA_P, espaco_antes=1, espaco_depois=1)
+            linhas = b["linhas"]
+            if not linhas:
+                continue
+            # calcula largura máxima por coluna para alinhar
+            ncols = max(len(r) for r in linhas)
+            col_widths = [0] * ncols
+            for r in linhas:
+                for j, c in enumerate(r):
+                    col_widths[j] = max(col_widths[j], min(len(str(c)), 18))
+            for r in linhas:
+                row_text = ""
+                for j, c in enumerate(r):
+                    s = _limpar_marcadores(str(c))[:18]
+                    row_text += s.ljust(col_widths[j] + 2) if j < ncols - 1 else s
+                add_p(cur_tf, row_text, sz=size - 1, cor=CINZA_P, espaco_antes=1, espaco_depois=1)
         char_count += bloco_chars
 
 
